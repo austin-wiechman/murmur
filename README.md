@@ -2,6 +2,8 @@
 
 Murmur is a free, open-source dictation (speech-to-text) app for the Mac menu bar. Hold the Globe key or F13 while you speak, or tap it for hands-free voice typing and tap again to stop. Murmur transcribes offline on your Mac with NVIDIA's Parakeet model, cleans up the text, and pastes it into the app you were using.
 
+<p align="center"><img src="docs/images/pill.png" width="640" alt="Murmur's listening pill floating over a note while you speak"></p>
+
 I built Murmur because I wanted a dictation app that runs locally and is still nice to look at. By default, nothing leaves your Mac. It's a free alternative to Wispr Flow, Superwhisper, and the dictation built into macOS.
 
 Murmur needs macOS 26 or later and about 580 MB of disk space for the speech model.
@@ -28,6 +30,8 @@ If you'd rather not run a binary I built, [build it from source](#build-from-sou
 On first launch, Murmur's menu bar menu walks you through setup. It asks for Accessibility and Microphone access and whether to check for updates automatically. It also downloads the speech model.
 
 ## Choose how text is cleaned up
+
+<p align="center"><img src="docs/images/menu.png" width="380" alt="Murmur's menu bar menu, with recent dictations and the cleanup options"></p>
 
 The menu has three cleanup options:
 

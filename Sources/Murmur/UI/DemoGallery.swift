@@ -24,6 +24,10 @@ enum DemoGallery {
             .appendingPathComponent("murmur-demo-\(UUID().uuidString).sqlite"))
         seed(history)
         let status = StatusStore()
+        status.setup.accessibility = true
+        status.setup.microphone = true
+        status.setup.updatesAnswered = true
+        status.setup.speechModelReady = true
         let missing = StatusStore()
         missing.accessibility = false
         missing.microphone = .notDetermined
@@ -47,11 +51,21 @@ enum DemoGallery {
              CGSize(width: 380, height: 520)),
             ("setup", AnyView(MenuBackdrop { MenuContent(prefs: prefs, history: history, status: settingUp, actions: actions) }),
              CGSize(width: 380, height: 420)),
+            ("readme-pill", AnyView(ReadmePill()), CGSize(width: 640, height: 320)),
+            ("readme-menu", AnyView(MenuBackdrop { MenuContent(prefs: prefs, history: history, status: status, actions: actions) }
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))), CGSize(width: 380, height: 472)),
         ]
 
         for (index, page) in pages.enumerated() {
+            // README images have no title bar; their views round their own corners.
+            let readme = page.0.hasPrefix("readme")
             let window = NSWindow(contentRect: CGRect(x: 40 + index * 30, y: 80, width: Int(page.2.width), height: Int(page.2.height)),
-                                  styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+                                  styleMask: readme ? [.borderless] : [.titled, .closable, .fullSizeContentView],
+                                  backing: .buffered, defer: false)
+            if readme {
+                window.isOpaque = false
+                window.backgroundColor = .clear
+            }
             window.title = page.0
             window.titlebarAppearsTransparent = page.0.hasPrefix("pills") || page.0 == "menu"
             window.contentView = NSHostingView(rootView: page.1.frame(width: page.2.width, height: page.2.height))
@@ -238,6 +252,36 @@ private struct PillGrid: View {
                         .padding(.horizontal, 16).padding(.top, 26)
                 }
             }
+        }
+    }
+}
+
+/// The README's main image: a note being dictated, with the pill listening.
+private struct ReadmePill: View {
+    @State private var store = PillStore()
+    @State private var meter = PillMeter()
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Color.white
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Trip planning").font(.system(size: 22, weight: .bold))
+                Text("Book the cabin for the second weekend of June. Check whether the trail to the lake is open by then, and pack the camp stove.")
+                    .font(.system(size: 15))
+                Text("Ask Jamie about borrowing the canoe.")
+                    .font(.system(size: 15))
+                Spacer()
+            }
+            .foregroundStyle(.black.opacity(0.85))
+            .padding(.horizontal, 36).padding(.top, 36)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            PillView(store: store, meter: meter, actions: nil)
+                .padding(.bottom, 28)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onAppear {
+            store.state = .listening(heard: true)
+            meter.levels = [0.2, 0.35, 0.55, 0.45, 0.75, 0.6, 0.9, 0.65, 0.95, 0.7, 0.85]
         }
     }
 }
