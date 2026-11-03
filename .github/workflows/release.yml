@@ -1,0 +1,97 @@
+name: Release
+
+# release-please calls this after it tags a release. Pushing a v* tag by hand also works.
+on:
+  push:
+    tags: ['v*']
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      SIGNING_IDENTITY: Murmur Release Signing
+      HAS_TAP_KEY: ${{ secrets.TAP_DEPLOY_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0 # build-app.sh numbers builds by commit count
+
+      - run: swift test
+
+      - name: Import the signing certificate
+        env:
+          CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p "" "$keychain"
+          security set-keychain-settings "$keychain"
+          security unlock-keychain -p "" "$keychain"
+          base64 --decode <<< "$CERT_P12" > "$RUNNER_TEMP/signing.p12"
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/signing.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+      - name: Build
+        run: |
+          MURMUR_RELEASE=1 MURMUR_VERSION="${TAG#v}" MURMUR_SIGN_IDENTITY="$SIGNING_IDENTITY" ./scripts/build-app.sh
+          # build-app.sh falls back to an ad hoc signature; a release must not.
+          codesign -d -r- build/Murmur.app 2>&1 | grep -q 'certificate leaf'
+          codesign -dv build/Murmur.app 2>&1 | grep -q 'flags=.*runtime'
+
+      - name: Package and write the appcast
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          mkdir dist
+          ditto -c -k --sequesterRsrc --keepParent build/Murmur.app "dist/Murmur-${TAG#v}.zip"
+          printf '%s' "$SPARKLE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          .build/artifacts/sparkle/Sparkle/bin/generate_appcast --ed-key-file "$RUNNER_TEMP/sparkle.key" \
+            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/" \
+            --link "https://github.com/$GITHUB_REPOSITORY" dist
+          rm "$RUNNER_TEMP/sparkle.key"
+          # After the appcast, so Sparkle keeps serving the zip.
+          ./scripts/make-dmg.sh "dist/Murmur-${TAG#v}.dmg"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # release-please has already created the release with its changelog notes; a hand-pushed tag has none.
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.dmg dist/*.zip dist/appcast.xml
+          else
+            gh release create "$TAG" dist/*.dmg dist/*.zip dist/appcast.xml --title "Murmur ${TAG#v}" --generate-notes
+          fi
+
+      - name: Update the Homebrew tap
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+        if: env.HAS_TAP_KEY == 'true'
+        run: |
+          version="${TAG#v}"
+          sha=$(shasum -a 256 "dist/Murmur-$version.zip" | cut -d' ' -f1)
+          eval "$(ssh-agent -s)"
+          ssh-add - <<< "$TAP_DEPLOY_KEY"
+          tap="$RUNNER_TEMP/tap"
+          git clone "git@github.com:${GITHUB_REPOSITORY_OWNER}/homebrew-tap.git" "$tap"
+          mkdir -p "$tap/Casks"
+          sed -e "s/@VERSION@/$version/" -e "s/@SHA256@/$sha/" -e "s|@REPOSITORY@|$GITHUB_REPOSITORY|g" \
+            packaging/homebrew/murmur.rb > "$tap/Casks/murmur.rb"
+          cd "$tap"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/murmur.rb
+          git commit -m "murmur $version"
+          git push
