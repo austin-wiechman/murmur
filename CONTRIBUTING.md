@@ -7,7 +7,7 @@ Murmur is a hobby project I work on in my spare time, mostly with [Claude Code](
 - Keep each pull request to one change. In the description, say what it fixes or adds and how you tested it.
 - Title it in the [Conventional Commits](https://www.conventionalcommits.org) format, such as `fix: keep the pill on the active screen`. The title becomes the commit on `main` and decides the next version number, so a check enforces the format.
 - Run `swift test` before you open it. CI runs the tests and a release build on every pull request.
-- For a UI change, attach before and after screenshots. `swift run Murmur --demo-gallery <dir>` renders every pill state, the menu, and each Settings section to PNG files in `<dir>`.
+- For a UI change, attach before and after screenshots. `swift run Murmur --demo-gallery <dir>` renders every pill state, the menu, and each Settings section to PNG files in `<dir>`. It also renders the two README images. If your change alters them, copy `readme-pill.png` and `readme-menu.png` over `docs/images/pill.png` and `docs/images/menu.png`.
 - For a larger feature, open an issue first so we can agree on the approach before you spend time on it.
 
 ## Work on the code
