@@ -26,6 +26,12 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0 # build-app.sh numbers builds by commit count
 
+      - uses: actions/cache/restore@v4
+        with:
+          path: .build
+          key: build-${{ runner.os }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          restore-keys: build-${{ runner.os }}-${{ hashFiles('Package.resolved') }}-
+
       - run: swift test
 
       - name: Import the signing certificate
