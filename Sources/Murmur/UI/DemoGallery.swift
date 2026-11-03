@@ -147,17 +147,17 @@ enum DemoGallery {
     private static func seed(_ history: HistoryStore) {
         let now = Date()
         history.add(HistoryEntry(id: 0, createdAt: now.addingTimeInterval(-3600),
-                                 raw: "Moved the dentist appointment to Thursday afternoon and remind me the day before so I don't forget it.",
-                                 text: "Move the dentist appointment to Thursday afternoon, and remind me the day before so I don't forget it.",
-                                 app: "Chrome", audioSeconds: 117, cleanupEngine: "claude", cleanupNote: nil, transcribeMs: 90, cleanupMs: 1700))
+                                 raw: "thanks for the notes I'll send the updated draft on Friday",
+                                 text: "Thanks for the notes. I'll send the updated draft on Friday.",
+                                 app: "Mail", audioSeconds: 5, cleanupEngine: "onDevice", cleanupNote: nil, transcribeMs: 60, cleanupMs: 900))
         history.add(HistoryEntry(id: 0, createdAt: now.addingTimeInterval(-1800),
-                                 raw: "Give me a short list of things to pack for the camping trip.",
-                                 text: "Give me a short list of things to pack for the camping trip.",
-                                 app: "Ghostty", audioSeconds: 8, cleanupEngine: "claude", cleanupNote: nil, transcribeMs: 60, cleanupMs: 1500))
+                                 raw: "running about ten minutes late go ahead and start without me",
+                                 text: "Running about ten minutes late. Go ahead and start without me.",
+                                 app: "Messages", audioSeconds: 4, cleanupEngine: "onDevice", cleanupNote: nil, transcribeMs: 50, cleanupMs: 800))
         history.add(HistoryEntry(id: 0, createdAt: now.addingTimeInterval(-60),
-                                 raw: "On Q4, yes, include the archived notes but put them at the end. Ask Sam to check the order Five I agree, the button should say export instead of save",
-                                 text: "- Q4: Yes, include the archived notes, but put them at the end. Ask Sam to check the order.\n- Q5: I agree, the button should say Export instead of Save.",
-                                 app: "Ghostty", audioSeconds: 30, cleanupEngine: "claude", cleanupNote: nil, transcribeMs: 80, cleanupMs: 1600))
+                                 raw: "add to the grocery list oat milk coffee filters and um two lemons",
+                                 text: "Add to the grocery list:\n- Oat milk\n- Coffee filters\n- Two lemons",
+                                 app: "Notes", audioSeconds: 6, cleanupEngine: "onDevice", cleanupNote: nil, transcribeMs: 60, cleanupMs: 1000))
     }
 
     struct Item: Identifiable {
