@@ -45,7 +45,7 @@ struct PermissionRows: View {
 
     private func buttonTitle(_ permission: Permission) -> String {
         if permission == .microphone && status.microphone == .notDetermined { return "Allow" }
-        if permission == .accessibility && !status.askedForAccessibility { return "Allow" }
+        if permission == .accessibility { return "Allow" }
         return "Open System Settings"
     }
 }

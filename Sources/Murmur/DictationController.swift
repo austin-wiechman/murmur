@@ -450,11 +450,8 @@ final class DictationController: AppActions {
 
     func grant(_ permission: Permission) {
         switch permission {
-        case .accessibility where !statusStore.askedForAccessibility:
-            statusStore.askedForAccessibility = true
-            Permissions.requestAccessibility()
         case .accessibility:
-            Permissions.openSettings(for: .accessibility)
+            Permissions.requestAccessibility()
         case .microphone where Permissions.microphone == .notDetermined:
             Task {
                 _ = await Permissions.requestMicrophone()
