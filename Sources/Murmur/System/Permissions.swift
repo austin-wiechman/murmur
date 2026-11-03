@@ -5,7 +5,14 @@ enum Permissions {
     static var accessibility: Bool { AXIsProcessTrusted() }
 
     /// Shows macOS's Accessibility alert, which also adds Murmur to the list in System Settings.
+    /// It first clears Murmur's own record: a record left by a build with another signature shows as
+    /// switched on yet never grants trust, and nothing can tell it apart from a missing one.
     static func requestAccessibility() {
+        guard !accessibility else { return }
+        let reset = Process()
+        reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        reset.arguments = ["reset", "Accessibility", Bundle.main.bundleIdentifier ?? ""]
+        if (try? reset.run()) != nil { reset.waitUntilExit() }
         AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
     }
 

@@ -12,7 +12,6 @@ final class StatusStore {
     var microphone: AVAuthorizationStatus = .authorized
     var claudeInstalled = true
     var onDeviceAvailable = true
-    var askedForAccessibility = false
     var setup = Setup(confirmed: true)
     var modelProgress: Transcriber.LoadProgress?
     var menuOpen = false
