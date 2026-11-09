@@ -40,6 +40,7 @@ struct SpeechModelStoreTests {
     /// FluidAudio re-downloads a pinned repo whose files came from another revision.
     @Test func filesFromAnotherRevisionAreNotPresent() throws {
         let pinned = SpeechModel(repo: .diarizer, requiredFiles: ["vocab.json"])
+        try #require(pinned.repo.revision != "main", "FluidAudio no longer pins the diarizer to a revision")
         try install(pinned)
         #expect(!store.isPresent(pinned))
         try Data(pinned.repo.revision.utf8).write(to: store.folder(for: pinned).appendingPathComponent(".fluidaudio-revision"))
