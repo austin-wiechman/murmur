@@ -46,6 +46,20 @@ struct ClaudeCodeTests {
         }
     }
 
+    @Test func reportsASchemaViolationWhenStructuredOutputIsNull() async {
+        await #expect(processExitsWith: .success) {
+            let claude = try fakeClaude("""
+                cat > /dev/null
+                echo '{"type":"result","is_error":false,"result":"","structured_output":null}'
+                """)
+            let request = ClaudeCodeRequest(model: "haiku", jsonSchema: #"{"type":"object"}"#)
+            do {
+                _ = try await claude.run(request, prompt: "Name a color.")
+                exit(1)
+            } catch ClaudeCodeError.schemaViolation {}
+        }
+    }
+
     @Test func reportsSignedOutWhenClaudeAsksForALogin() async throws {
         let claude = try fakeClaude("""
             cat > /dev/null
