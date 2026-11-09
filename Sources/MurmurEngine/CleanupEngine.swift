@@ -1,5 +1,4 @@
 import Foundation
-import MurmurCore
 
 public enum CleanupEngine: String, Codable, CaseIterable, Sendable {
     case off
@@ -17,8 +16,4 @@ extension CleanupEngine {
         case .off: .off
         }
     }
-}
-
-public protocol Cleaner: Sendable {
-    func prepare(instructions: String) -> CleanupSession
 }

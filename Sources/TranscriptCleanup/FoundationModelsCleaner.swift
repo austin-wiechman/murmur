@@ -1,6 +1,5 @@
 import Foundation
 import FoundationModels
-import MurmurCore
 
 /// Apple's on-device model. Measured on an M1 Pro at 0.6–1.2 s per cleanup once warm; a cold first
 /// call costs 1.6–5 s, which `prewarm()` at key-down hides behind the recording.

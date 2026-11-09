@@ -1,5 +1,5 @@
 import Testing
-@testable import MurmurCore
+import TranscriptCleanup
 
 private struct StubSession: CleanupSession {
     var reply: @Sendable () async throws -> String

@@ -1,7 +1,7 @@
 import Foundation
-import MurmurCore
 import MurmurEngine
 import Testing
+import TranscriptCleanup
 
 struct ClaudeCLICleanerTests {
     /// `prepare` spawns claude at key-down; a claude that rejects a flag (an older Claude Code without

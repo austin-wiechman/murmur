@@ -1,5 +1,5 @@
 import Testing
-@testable import MurmurCore
+import TranscriptCleanup
 
 struct CleanupGuardTests {
     @Test func stripsAPreambleWithEitherApostrophe() {

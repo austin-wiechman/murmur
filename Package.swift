@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v26)],
     products: [
         .library(name: "ClaudeCodeRunner", targets: ["ClaudeCodeRunner"]),
+        .library(name: "TranscriptCleanup", targets: ["TranscriptCleanup"]),
     ],
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio.git",
@@ -15,17 +16,20 @@ let package = Package(
     targets: [
         .target(name: "MurmurCore"),
         .target(name: "ClaudeCodeRunner"),
+        .target(name: "TranscriptCleanup"),
         .target(name: "MurmurEngine",
-                dependencies: ["MurmurCore", "ClaudeCodeRunner",
+                dependencies: ["TranscriptCleanup", "ClaudeCodeRunner",
                               .product(name: "FluidAudio", package: "FluidAudio")],
                 swiftSettings: [.swiftLanguageMode(.v5)]),
         .executableTarget(name: "Murmur",
-                          dependencies: ["MurmurEngine", "ClaudeCodeRunner",
+                          dependencies: ["MurmurCore", "MurmurEngine", "TranscriptCleanup", "ClaudeCodeRunner",
                                          .product(name: "Sparkle", package: "Sparkle")],
                           swiftSettings: [.swiftLanguageMode(.v5)]),
-        .executableTarget(name: "murmur-bench", dependencies: ["MurmurEngine", "ClaudeCodeRunner"]),
+        .executableTarget(name: "murmur-bench", dependencies: ["MurmurCore", "MurmurEngine", "TranscriptCleanup",
+                                                                 "ClaudeCodeRunner"]),
         .testTarget(name: "MurmurCoreTests", dependencies: ["MurmurCore"]),
         .testTarget(name: "ClaudeCodeRunnerTests", dependencies: ["ClaudeCodeRunner"]),
+        .testTarget(name: "TranscriptCleanupTests", dependencies: ["TranscriptCleanup"]),
         .testTarget(name: "MurmurTests", dependencies: ["Murmur"]),
     ]
 )

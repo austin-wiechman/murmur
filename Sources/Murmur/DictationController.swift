@@ -4,6 +4,7 @@ import ClaudeCodeRunner
 import MurmurCore
 import MurmurEngine
 import Observation
+import TranscriptCleanup
 
 /// Runs one dictation at a time: key-down starts the mic and warms the cleaner, key-up (or the
 /// second tap) finishes transcription, cleans up within the user's time limit, and pastes.
