@@ -122,16 +122,18 @@ struct ClaudeCodeTests {
     }
 
     @Test func cancellingTheTaskStopsClaude() async throws {
+        let pidFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let claude = try fakeClaude("""
+            echo $$ > '\(pidFile.path)'
             cat > /dev/null
-            sleep 30
+            exec sleep 30
             """)
         let run = Task { try await claude.run(request, prompt: "hi") }
-        try await Task.sleep(for: .milliseconds(200))
-        let start = ContinuousClock.now
+        var pid: Int32?
+        try await poll { pid = (try? String(contentsOf: pidFile, encoding: .utf8)).flatMap { Int32($0.dropLast()) }; return pid != nil }
         run.cancel()
         await #expect(throws: CancellationError.self) { try await run.value }
-        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(try await poll { kill(try #require(pid), 0) != 0 })
     }
 
     /// A prompt larger than the pipe buffer deadlocks if stdin is written before stdout is read.
@@ -158,6 +160,17 @@ struct ClaudeCodeTests {
         let result = try await session.run("send it by friday")
         #expect(result.text == "Send it by Friday.")
     }
+}
+
+/// Checks `condition` until it holds or three seconds pass, and returns whether it held.
+@discardableResult
+func poll(_ condition: () throws -> Bool) async throws -> Bool {
+    let deadline = ContinuousClock.now + .seconds(3)
+    while try !condition() {
+        guard ContinuousClock.now < deadline else { return false }
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    return true
 }
 
 func fakeClaude(_ body: String) throws -> ClaudeCode {
