@@ -28,7 +28,6 @@ public struct ClaudeCodeResult: Sendable, Equatable {
 }
 
 public enum ClaudeCodeError: Error, Equatable, CustomStringConvertible {
-    /// No `claude` executable was found.
     case notInstalled
     case launchFailed(String)
     /// Claude Code has no valid login; the user needs to run `claude` and `/login`.
