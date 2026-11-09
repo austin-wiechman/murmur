@@ -68,6 +68,18 @@ struct ClaudeCodeTests {
         }
     }
 
+    @Test func reportsTheErrorsOfAnErrorResultWithoutText() async throws {
+        let claude = try fakeClaude("""
+            cat > /dev/null
+            echo '{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["boom"]}'
+            exit 1
+            """)
+        let error = await #expect(throws: ClaudeCodeError.self) {
+            try await claude.run(request, prompt: "hi")
+        }
+        #expect(error?.description.contains("boom") == true)
+    }
+
     @Test func reportsAnExitWithoutAResult() async throws {
         let claude = try fakeClaude("""
             echo "error: unknown option '--effort'" >&2
