@@ -23,9 +23,7 @@ public struct ClaudeCode: Sendable {
     /// GUI apps get a minimal PATH, so this looks where installers put `claude` before asking a login
     /// shell.
     public static func locate() async -> URL? {
-        await withCheckedContinuation { done in
-            DispatchQueue.global(qos: .userInitiated).async { done.resume(returning: locateBlocking()) }
-        }
+        await onDispatchThread { locateBlocking() }
     }
 
     private static func locateBlocking() -> URL? {
