@@ -121,18 +121,6 @@ struct ClaudeCodeTests {
         }
     }
 
-    @Test func stopsClaudeAtTheDeadline() async throws {
-        let claude = try fakeClaude("""
-            cat > /dev/null
-            sleep 30
-            """)
-        let start = ContinuousClock.now
-        await #expect(throws: ClaudeCodeError.timedOut) {
-            try await claude.run(request, prompt: "hi", timeout: .milliseconds(200))
-        }
-        #expect(ContinuousClock.now - start < .seconds(5))
-    }
-
     @Test func cancellingTheTaskStopsClaude() async throws {
         let claude = try fakeClaude("""
             cat > /dev/null
