@@ -46,6 +46,7 @@ struct ClaudeCodeTests {
         }
     }
 
+    /// An exit test, because the crash this guards against is an exception `try?` can't catch.
     @Test func reportsASchemaViolationWhenStructuredOutputIsNull() async {
         await #expect(processExitsWith: .success) {
             let claude = try fakeClaude("""
