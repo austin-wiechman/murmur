@@ -12,7 +12,7 @@ enum ClaudeCodeOutput {
         }
         let text = json["result"] as? String ?? ""
         if (json["is_error"] as? Bool) == true {
-            if text.contains("/login") { throw .signedOut(text) }
+            if isSignedOut(text) { throw .signedOut(text) }
             if expectsStructuredOutput, (json["subtype"] as? String)?.contains("structured_output") == true {
                 throw .schemaViolation(text)
             }
@@ -22,6 +22,11 @@ enum ClaudeCodeOutput {
         if expectsStructuredOutput, structured == nil { throw .schemaViolation(text) }
         return ClaudeCodeResult(text: text, structuredOutput: structured, costUSD: json["total_cost_usd"] as? Double,
                                 usage: (json["usage"] as? [String: Any]).map(usage))
+    }
+
+    private static func isSignedOut(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return ["not logged in", "/login", "invalid api key", "oauth token has expired"].contains { lowered.contains($0) }
     }
 
     private static func errorSummary(_ json: [String: Any]) -> String {
