@@ -21,9 +21,9 @@ public struct ClaudeCodeResult: Sendable, Equatable {
     public var costUSD: Double?
     public var usage: Usage?
 
-    public func decode<T: Decodable>(_ type: T.Type, using decoder: JSONDecoder = JSONDecoder()) throws -> T {
+    public func decode<T: Decodable>(_ type: T.Type) throws -> T {
         guard let structuredOutput else { throw ClaudeCodeError.schemaViolation(text) }
-        return try decoder.decode(type, from: structuredOutput)
+        return try JSONDecoder().decode(type, from: structuredOutput)
     }
 }
 
