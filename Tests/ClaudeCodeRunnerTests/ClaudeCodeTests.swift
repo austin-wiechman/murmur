@@ -126,8 +126,9 @@ struct ClaudeCodeTests {
     }
 
     /// A prompt larger than the pipe buffer deadlocks if stdin is written before stdout is read.
-    @Test func deliversAPromptLargerThanThePipeBuffer() async throws {
+    @Test(.timeLimit(.minutes(1))) func deliversAPromptLargerThanThePipeBuffer() async throws {
         let claude = try fakeClaude("""
+            head -c 200000 /dev/zero | tr '\\0' x; echo
             bytes=$(wc -c | tr -d ' ')
             echo "{\\"type\\":\\"result\\",\\"is_error\\":false,\\"result\\":\\"$bytes\\"}"
             """)
