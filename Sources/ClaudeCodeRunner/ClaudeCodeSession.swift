@@ -21,7 +21,7 @@ public final class ClaudeCodeSession: Sendable {
         }
         process.executableURL = executable
         process.arguments = request.arguments
-        process.currentDirectoryURL = request.workingDirectory
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = executable.deletingLastPathComponent().path + ":/usr/bin:/bin:" + (env["PATH"] ?? "")
         process.environment = env
