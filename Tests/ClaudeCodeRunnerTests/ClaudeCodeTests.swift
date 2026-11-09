@@ -140,12 +140,12 @@ struct ClaudeCodeTests {
     @Test func aPreparedSessionAnswersThePromptSentLater() async throws {
         let claude = try fakeClaude("""
             read -r line
-            case "$line" in
-            *'"content":"send it by friday"'*) echo '{"type":"result","is_error":false,"result":"Send it by Friday."}' ;;
+            case "$*|$line" in
+            *'--system-prompt Clean this up.'*'"content":"send it by friday"'*) echo '{"type":"result","is_error":false,"result":"Send it by Friday."}' ;;
             *) echo '{"type":"result","is_error":true,"result":"unexpected input"}' ;;
             esac
             """)
-        let session = claude.prepare(request)
+        let session = claude.prepare(ClaudeCodeRequest(model: "haiku", systemPrompt: "Clean this up."))
         try await Task.sleep(for: .milliseconds(100))
         let result = try await session.run("send it by friday")
         #expect(result.text == "Send it by Friday.")
