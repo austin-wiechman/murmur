@@ -44,9 +44,15 @@ public struct SpeechModelStore: Sendable {
     public func download(_ model: SpeechModel, progress: (@Sendable (Double) -> Void)? = nil) async throws {
         var handler: ProgressHandler?
         if let progress {
-            handler = { update in progress(update.fractionCompleted) }
+            handler = { update in progress(Self.downloadFraction(update.fractionCompleted)) }
         }
         try await ModelHub.download(model.repo, to: directory, variant: model.variant,
                                     additionalModelNames: model.requiredFiles, progressHandler: handler)
+    }
+
+    /// FluidAudio's repo download reports its download phase as 0...0.5 and reserves the rest for a
+    /// compile step that loading the model does later.
+    static func downloadFraction(_ reported: Double) -> Double {
+        min(max(reported / 0.5, 0), 1)
     }
 }

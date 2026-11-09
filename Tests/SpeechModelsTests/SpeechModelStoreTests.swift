@@ -1,6 +1,6 @@
 import FluidAudio
 import Foundation
-import SpeechModels
+@testable import SpeechModels
 import Testing
 
 struct SpeechModelStoreTests {
@@ -44,6 +44,13 @@ struct SpeechModelStoreTests {
         #expect(!store.isPresent(pinned))
         try Data(pinned.repo.revision.utf8).write(to: store.folder(for: pinned).appendingPathComponent(".fluidaudio-revision"))
         #expect(store.isPresent(pinned))
+    }
+
+    @Test func downloadProgressSpansZeroToOne() {
+        #expect(SpeechModelStore.downloadFraction(0) == 0)
+        #expect(SpeechModelStore.downloadFraction(0.25) == 0.5)
+        #expect(SpeechModelStore.downloadFraction(0.5) == 1)
+        #expect(SpeechModelStore.downloadFraction(0.75) == 1)
     }
 
     private func install(_ model: SpeechModel) throws {
