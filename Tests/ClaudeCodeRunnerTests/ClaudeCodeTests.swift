@@ -60,24 +60,14 @@ struct ClaudeCodeTests {
         }
     }
 
-    @Test func reportsSignedOutWhenClaudeAsksForALogin() async throws {
+    @Test(arguments: ["Not logged in · Please run /login", "OAuth token has expired."])
+    func reportsSignedOutWhenClaudeNeedsALogin(message: String) async throws {
         let claude = try fakeClaude("""
             cat > /dev/null
-            echo '{"type":"result","subtype":"success","is_error":true,"result":"Not logged in · Please run /login"}'
+            echo '{"type":"result","subtype":"success","is_error":true,"result":"\(message)"}'
             exit 1
             """)
-        await #expect(throws: ClaudeCodeError.signedOut("Not logged in · Please run /login")) {
-            try await claude.run(request, prompt: "hi")
-        }
-    }
-
-    @Test func reportsSignedOutWhenTheLoginHasExpired() async throws {
-        let claude = try fakeClaude("""
-            cat > /dev/null
-            echo '{"type":"result","is_error":true,"result":"OAuth token has expired."}'
-            exit 1
-            """)
-        await #expect(throws: ClaudeCodeError.signedOut("OAuth token has expired.")) {
+        await #expect(throws: ClaudeCodeError.signedOut(message)) {
             try await claude.run(request, prompt: "hi")
         }
     }
@@ -99,10 +89,9 @@ struct ClaudeCodeTests {
             echo '{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["boom"]}'
             exit 1
             """)
-        let error = await #expect(throws: ClaudeCodeError.self) {
+        await #expect(throws: ClaudeCodeError.failed("boom")) {
             try await claude.run(request, prompt: "hi")
         }
-        #expect(error?.description.contains("boom") == true)
     }
 
     @Test func reportsAnExitWithoutAResult() async throws {
