@@ -20,7 +20,7 @@ let package = Package(
         .target(name: "TranscriptCleanup"),
         .target(name: "SpeechModels", dependencies: [.product(name: "FluidAudio", package: "FluidAudio")]),
         .target(name: "MurmurEngine",
-                dependencies: ["TranscriptCleanup", "ClaudeCodeRunner",
+                dependencies: ["TranscriptCleanup", "ClaudeCodeRunner", "SpeechModels",
                               .product(name: "FluidAudio", package: "FluidAudio")],
                 swiftSettings: [.swiftLanguageMode(.v5)]),
         .executableTarget(name: "Murmur",

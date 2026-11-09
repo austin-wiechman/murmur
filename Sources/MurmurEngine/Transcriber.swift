@@ -1,14 +1,13 @@
 import AVFoundation
 import FluidAudio
+import SpeechModels
 
 /// Streams microphone audio into Parakeet Unified while the user speaks, so only the last
 /// chunk is left to decode at release (measured 62–114 ms on an M1 Pro).
-///
-/// The 1.12 s look-ahead tier is used: on the user's dictations it matched batch output, while
-/// the 2.08 s tier misplaced punctuation. int8 is required on M1; fp16 falls back to the CPU.
 public actor Transcriber {
     private let manager = StreamingUnifiedAsrManager(
-        config: UnifiedConfig(leftFrames: 70, chunkFrames: 7, rightFrames: 7), encoderPrecision: .int8)
+        config: DictationModel.config, encoderPrecision: DictationModel.encoderPrecision)
+    private let store = SpeechModelStore()
     private var loaded = false
     private var feeding: Task<Void, Never>?
     private var feedError: Error?
@@ -24,7 +23,7 @@ public actor Transcriber {
     /// later launches load in under a second and report no progress.
     public func load(progress: (@Sendable (LoadProgress) -> Void)? = nil) async throws {
         guard !loaded else { return }
-        try await manager.loadModels(progressHandler: progress.map { report in
+        try await manager.loadModels(to: store.directory, progressHandler: progress.map { report in
             { @Sendable update in
                 switch update.phase {
                 case .listing: report(.downloading(0))
