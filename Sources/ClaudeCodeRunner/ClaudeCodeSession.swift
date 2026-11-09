@@ -74,10 +74,14 @@ public final class ClaudeCodeSession: Sendable {
 
     private func answer(_ prompt: String) async throws -> ClaudeCodeResult {
         if let launchError = await launch.value { throw launchError }
-        async let output = Self.readToEnd(stdout.fileHandleForReading)
-        async let errors = Self.readToEnd(stderr.fileHandleForReading)
+        let out = stdout.fileHandleForReading, err = stderr.fileHandleForReading
+        async let output = onDispatchThread { (try? out.readToEnd()) ?? Data() }
+        async let errors = onDispatchThread { (try? err.readToEnd()) ?? Data() }
         await Self.send(prompt, to: stdin.fileHandleForWriting)
-        let status = await Self.waitForExit(process)
+        let status = await onDispatchThread { [process] in
+            process.waitUntilExit()
+            return process.terminationStatus
+        }
         return try ClaudeCodeOutput.parse(await output, errors: await errors, status: status,
                                           expectsStructuredOutput: expectsStructuredOutput)
     }
@@ -88,30 +92,16 @@ public final class ClaudeCodeSession: Sendable {
         let line = json + [0x0A]
         // claude may have exited already; without this the write raises SIGPIPE and kills the app.
         _ = fcntl(input.fileDescriptor, F_SETNOSIGPIPE, 1)
-        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            DispatchQueue.global(qos: .userInitiated).async {
-                // A failed write means claude exited; its status and stderr explain why.
-                try? input.write(contentsOf: line)
-                try? input.close()
-                done.resume()
-            }
+        await onDispatchThread {
+            // A failed write means claude exited; its status and stderr explain why.
+            try? input.write(contentsOf: line)
+            try? input.close()
         }
     }
+}
 
-    private static func readToEnd(_ handle: FileHandle) async -> Data {
-        await withCheckedContinuation { done in
-            DispatchQueue.global(qos: .userInitiated).async {
-                done.resume(returning: (try? handle.readToEnd()) ?? Data())
-            }
-        }
-    }
-
-    private static func waitForExit(_ process: Process) async -> Int32 {
-        await withCheckedContinuation { done in
-            DispatchQueue.global(qos: .userInitiated).async {
-                process.waitUntilExit()
-                done.resume(returning: process.terminationStatus)
-            }
-        }
+func onDispatchThread<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+    await withCheckedContinuation { done in
+        DispatchQueue.global(qos: .userInitiated).async { done.resume(returning: work()) }
     }
 }

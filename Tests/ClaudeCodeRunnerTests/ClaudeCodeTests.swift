@@ -57,6 +57,17 @@ struct ClaudeCodeTests {
         }
     }
 
+    @Test func reportsSignedOutWhenTheLoginHasExpired() async throws {
+        let claude = try fakeClaude("""
+            cat > /dev/null
+            echo '{"type":"result","is_error":true,"result":"OAuth token has expired."}'
+            exit 1
+            """)
+        await #expect(throws: ClaudeCodeError.signedOut("OAuth token has expired.")) {
+            try await claude.run(request, prompt: "hi")
+        }
+    }
+
     @Test func reportsAnErrorResultAsAFailure() async throws {
         let claude = try fakeClaude("""
             cat > /dev/null
