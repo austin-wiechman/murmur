@@ -125,6 +125,16 @@ struct ClaudeCodeTests {
         #expect(try await poll { kill(try #require(pid), 0) != 0 })
     }
 
+    /// A `claude` that rejects a flag exits at once, so nothing reads the prompt sent to it later.
+    @Test func sendingToAClaudeThatAlreadyExitedDoesNotKillTheApp() async {
+        await #expect(processExitsWith: .success) {
+            let session = ClaudeCode(executable: URL(fileURLWithPath: "/usr/bin/false"))
+                .prepare(ClaudeCodeRequest(model: "haiku"))
+            try await Task.sleep(for: .seconds(1))
+            _ = try? await session.run("send it by friday please")
+        }
+    }
+
     /// A prompt larger than the pipe buffer deadlocks if stdin is written before stdout is read.
     @Test(.timeLimit(.minutes(1))) func deliversAPromptLargerThanThePipeBuffer() async throws {
         let claude = try fakeClaude("""
