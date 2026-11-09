@@ -46,6 +46,7 @@ struct ClaudeCodeTests {
         }
     }
 
+    /// An exit test, because the crash this guards against is an exception `try?` can't catch.
     @Test func reportsASchemaViolationWhenStructuredOutputIsNull() async {
         await #expect(processExitsWith: .success) {
             let claude = try fakeClaude("""
@@ -162,7 +163,6 @@ struct ClaudeCodeTests {
     }
 }
 
-/// Checks `condition` until it holds or three seconds pass, and returns whether it held.
 @discardableResult
 func poll(_ condition: () throws -> Bool) async throws -> Bool {
     let deadline = ContinuousClock.now + .seconds(3)

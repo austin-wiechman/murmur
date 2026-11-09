@@ -28,7 +28,6 @@ public struct ClaudeCodeResult: Sendable, Equatable {
 }
 
 public enum ClaudeCodeError: Error, Equatable, CustomStringConvertible {
-    /// No `claude` executable was found.
     case notInstalled
     case launchFailed(String)
     /// Claude Code has no valid login; the user needs to run `claude` and `/login`.
@@ -38,7 +37,7 @@ public enum ClaudeCodeError: Error, Equatable, CustomStringConvertible {
     case exited(status: Int32, stderr: String)
     /// `claude` returned an error result, such as an API error.
     case failed(String)
-    /// The request carried a schema and the answer did not match it.
+    /// The answer did not match the request's schema, or `decode` found no structured output.
     case schemaViolation(String)
 
     public var description: String {
