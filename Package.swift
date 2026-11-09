@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "ClaudeCodeRunner", targets: ["ClaudeCodeRunner"]),
         .library(name: "TranscriptCleanup", targets: ["TranscriptCleanup"]),
+        .library(name: "SpeechModels", targets: ["SpeechModels"]),
     ],
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio.git",
@@ -17,6 +18,7 @@ let package = Package(
         .target(name: "MurmurCore"),
         .target(name: "ClaudeCodeRunner"),
         .target(name: "TranscriptCleanup"),
+        .target(name: "SpeechModels", dependencies: [.product(name: "FluidAudio", package: "FluidAudio")]),
         .target(name: "MurmurEngine",
                 dependencies: ["TranscriptCleanup", "ClaudeCodeRunner",
                               .product(name: "FluidAudio", package: "FluidAudio")],
@@ -30,6 +32,8 @@ let package = Package(
         .testTarget(name: "MurmurCoreTests", dependencies: ["MurmurCore"]),
         .testTarget(name: "ClaudeCodeRunnerTests", dependencies: ["ClaudeCodeRunner"]),
         .testTarget(name: "TranscriptCleanupTests", dependencies: ["TranscriptCleanup"]),
+        .testTarget(name: "SpeechModelsTests",
+                    dependencies: ["SpeechModels", .product(name: "FluidAudio", package: "FluidAudio")]),
         .testTarget(name: "MurmurTests", dependencies: ["Murmur"]),
     ]
 )
