@@ -16,12 +16,17 @@ enum ClaudeCodeOutput {
             if expectsStructuredOutput, (json["subtype"] as? String)?.contains("structured_output") == true {
                 throw .schemaViolation(text)
             }
-            throw .failed(text.isEmpty ? "error" : text)
+            throw .failed(text.isEmpty ? errorSummary(json) : text)
         }
         let structured = json["structured_output"].flatMap { try? JSONSerialization.data(withJSONObject: $0) }
         if expectsStructuredOutput, structured == nil { throw .schemaViolation(text) }
         return ClaudeCodeResult(text: text, structuredOutput: structured, costUSD: json["total_cost_usd"] as? Double,
                                 usage: (json["usage"] as? [String: Any]).map(usage))
+    }
+
+    private static func errorSummary(_ json: [String: Any]) -> String {
+        if let errors = json["errors"] as? [String], !errors.isEmpty { return errors.joined(separator: "; ") }
+        return json["subtype"] as? String ?? "error"
     }
 
     private static func usage(_ json: [String: Any]) -> ClaudeCodeResult.Usage {
