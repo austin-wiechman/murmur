@@ -18,7 +18,10 @@ enum ClaudeCodeOutput {
             }
             throw .failed(text.isEmpty ? errorSummary(json) : text)
         }
-        let structured = json["structured_output"].flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+        // JSONSerialization raises an exception `try?` can't catch for a null or scalar value.
+        let structured = json["structured_output"].flatMap {
+            JSONSerialization.isValidJSONObject($0) ? try? JSONSerialization.data(withJSONObject: $0) : nil
+        }
         if expectsStructuredOutput, structured == nil { throw .schemaViolation(text) }
         return ClaudeCodeResult(text: text, structuredOutput: structured, costUSD: json["total_cost_usd"] as? Double,
                                 usage: (json["usage"] as? [String: Any]).map(usage))

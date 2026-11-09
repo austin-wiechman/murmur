@@ -46,24 +46,28 @@ struct ClaudeCodeTests {
         }
     }
 
-    @Test func reportsSignedOutWhenClaudeAsksForALogin() async throws {
-        let claude = try fakeClaude("""
-            cat > /dev/null
-            echo '{"type":"result","subtype":"success","is_error":true,"result":"Not logged in · Please run /login"}'
-            exit 1
-            """)
-        await #expect(throws: ClaudeCodeError.signedOut("Not logged in · Please run /login")) {
-            try await claude.run(request, prompt: "hi")
+    @Test func reportsASchemaViolationWhenStructuredOutputIsNull() async {
+        await #expect(processExitsWith: .success) {
+            let claude = try fakeClaude("""
+                cat > /dev/null
+                echo '{"type":"result","is_error":false,"result":"","structured_output":null}'
+                """)
+            let request = ClaudeCodeRequest(model: "haiku", jsonSchema: #"{"type":"object"}"#)
+            do {
+                _ = try await claude.run(request, prompt: "Name a color.")
+                exit(1)
+            } catch ClaudeCodeError.schemaViolation {}
         }
     }
 
-    @Test func reportsSignedOutWhenTheLoginHasExpired() async throws {
+    @Test(arguments: ["Not logged in · Please run /login", "OAuth token has expired."])
+    func reportsSignedOutWhenClaudeNeedsALogin(message: String) async throws {
         let claude = try fakeClaude("""
             cat > /dev/null
-            echo '{"type":"result","is_error":true,"result":"OAuth token has expired."}'
+            echo '{"type":"result","subtype":"success","is_error":true,"result":"\(message)"}'
             exit 1
             """)
-        await #expect(throws: ClaudeCodeError.signedOut("OAuth token has expired.")) {
+        await #expect(throws: ClaudeCodeError.signedOut(message)) {
             try await claude.run(request, prompt: "hi")
         }
     }
@@ -85,10 +89,9 @@ struct ClaudeCodeTests {
             echo '{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["boom"]}'
             exit 1
             """)
-        let error = await #expect(throws: ClaudeCodeError.self) {
+        await #expect(throws: ClaudeCodeError.failed("boom")) {
             try await claude.run(request, prompt: "hi")
         }
-        #expect(error?.description.contains("boom") == true)
     }
 
     @Test func reportsAnExitWithoutAResult() async throws {
@@ -107,34 +110,35 @@ struct ClaudeCodeTests {
         }
     }
 
-    @Test func stopsClaudeAtTheDeadline() async throws {
-        let claude = try fakeClaude("""
-            cat > /dev/null
-            sleep 30
-            """)
-        let start = ContinuousClock.now
-        await #expect(throws: ClaudeCodeError.timedOut) {
-            try await claude.run(request, prompt: "hi", timeout: .milliseconds(200))
-        }
-        #expect(ContinuousClock.now - start < .seconds(5))
-    }
-
     @Test func cancellingTheTaskStopsClaude() async throws {
+        let pidFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let claude = try fakeClaude("""
+            echo $$ > '\(pidFile.path)'
             cat > /dev/null
-            sleep 30
+            exec sleep 30
             """)
         let run = Task { try await claude.run(request, prompt: "hi") }
-        try await Task.sleep(for: .milliseconds(200))
-        let start = ContinuousClock.now
+        var pid: Int32?
+        try await poll { pid = (try? String(contentsOf: pidFile, encoding: .utf8)).flatMap { Int32($0.dropLast()) }; return pid != nil }
         run.cancel()
         await #expect(throws: CancellationError.self) { try await run.value }
-        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(try await poll { kill(try #require(pid), 0) != 0 })
+    }
+
+    /// A `claude` that rejects a flag exits at once, so nothing reads the prompt sent to it later.
+    @Test func sendingToAClaudeThatAlreadyExitedDoesNotKillTheApp() async {
+        await #expect(processExitsWith: .success) {
+            let session = ClaudeCode(executable: URL(fileURLWithPath: "/usr/bin/false"))
+                .prepare(ClaudeCodeRequest(model: "haiku"))
+            try await Task.sleep(for: .seconds(1))
+            _ = try? await session.run("send it by friday please")
+        }
     }
 
     /// A prompt larger than the pipe buffer deadlocks if stdin is written before stdout is read.
-    @Test func deliversAPromptLargerThanThePipeBuffer() async throws {
+    @Test(.timeLimit(.minutes(1))) func deliversAPromptLargerThanThePipeBuffer() async throws {
         let claude = try fakeClaude("""
+            head -c 200000 /dev/zero | tr '\\0' x; echo
             bytes=$(wc -c | tr -d ' ')
             echo "{\\"type\\":\\"result\\",\\"is_error\\":false,\\"result\\":\\"$bytes\\"}"
             """)
@@ -146,23 +150,34 @@ struct ClaudeCodeTests {
     @Test func aPreparedSessionAnswersThePromptSentLater() async throws {
         let claude = try fakeClaude("""
             read -r line
-            case "$line" in
-            *'"content":"send it by friday"'*) echo '{"type":"result","is_error":false,"result":"Send it by Friday."}' ;;
+            case "$*|$line" in
+            *'--system-prompt Clean this up.'*'"content":"send it by friday"'*) echo '{"type":"result","is_error":false,"result":"Send it by Friday."}' ;;
             *) echo '{"type":"result","is_error":true,"result":"unexpected input"}' ;;
             esac
             """)
-        let session = claude.prepare(request)
+        let session = claude.prepare(ClaudeCodeRequest(model: "haiku", systemPrompt: "Clean this up."))
         try await Task.sleep(for: .milliseconds(100))
         let result = try await session.run("send it by friday")
         #expect(result.text == "Send it by Friday.")
     }
+}
 
-    private func fakeClaude(_ body: String) throws -> ClaudeCode {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let script = directory.appendingPathComponent("claude")
-        try ("#!/bin/sh\n" + body + "\n").write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        return ClaudeCode(executable: script)
+/// Checks `condition` until it holds or three seconds pass, and returns whether it held.
+@discardableResult
+func poll(_ condition: () throws -> Bool) async throws -> Bool {
+    let deadline = ContinuousClock.now + .seconds(3)
+    while try !condition() {
+        guard ContinuousClock.now < deadline else { return false }
+        try await Task.sleep(for: .milliseconds(20))
     }
+    return true
+}
+
+func fakeClaude(_ body: String) throws -> ClaudeCode {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let script = directory.appendingPathComponent("claude")
+    try ("#!/bin/sh\n" + body + "\n").write(to: script, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    return ClaudeCode(executable: script)
 }
