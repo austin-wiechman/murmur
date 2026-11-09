@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 /// One `claude` process that answers one prompt. Blocking pipe and process work runs on Dispatch
 /// threads, so callers on the main actor or the cooperative pool never wait on it.
@@ -9,7 +8,6 @@ public final class ClaudeCodeSession: Sendable {
     private let stdout = Pipe()
     private let stderr = Pipe()
     private let expectsStructuredOutput: Bool
-    private let exitStatus = ExitStatus()
     /// Launching a process can block, so it runs off the caller's thread; nil once running.
     private let launch: Task<ClaudeCodeError?, Never>
 
@@ -28,7 +26,6 @@ public final class ClaudeCodeSession: Sendable {
         process.standardInput = stdin
         process.standardOutput = stdout
         process.standardError = stderr
-        process.terminationHandler = { [exitStatus] process in exitStatus.record(process.terminationStatus) }
         launch = Task.detached(priority: .userInitiated) { [process] in
             do {
                 try process.run()
@@ -40,41 +37,48 @@ public final class ClaudeCodeSession: Sendable {
     }
 
     /// Sends the prompt and waits for the answer. Cancelling the calling task, or passing the
-    /// deadline, terminates `claude`.
+    /// deadline, stops `claude` and returns without waiting for it to exit.
     public func run(_ prompt: String, timeout: Duration? = nil) async throws -> ClaudeCodeResult {
-        guard let timeout else { return try await answer(prompt) }
-        return try await withThrowingTaskGroup(of: ClaudeCodeResult.self) { group in
-            group.addTask { try await self.answer(prompt) }
-            group.addTask {
-                try await Task.sleep(for: timeout)
-                throw ClaudeCodeError.timedOut
-            }
-            defer { group.cancelAll() }
-            return try await group.next()!
+        // Unstructured tasks: a task group would wait for claude's pipes to close and its exit.
+        let (results, deliver) = AsyncStream.makeStream(of: Result<ClaudeCodeResult, Error>.self)
+        Task {
+            do { deliver.yield(.success(try await answer(prompt))) } catch { deliver.yield(.failure(error)) }
         }
+        let timer = timeout.map { timeout in
+            Task {
+                try await Task.sleep(for: timeout)
+                deliver.yield(.failure(ClaudeCodeError.timedOut))
+            }
+        }
+        var iterator = results.makeAsyncIterator()
+        let first = await iterator.next()
+        deliver.finish()
+        timer?.cancel()
+        guard let first else {
+            cancel()
+            throw CancellationError()
+        }
+        if case .failure = first { cancel() }
+        return try first.get()
     }
 
+    /// Stops `claude`, killing it if it has not exited after a short grace period.
     public func cancel() {
         Task { [launch, process] in
-            if await launch.value == nil, process.isRunning { process.terminate() }
+            guard await launch.value == nil, process.isRunning else { return }
+            process.terminate()
+            try? await Task.sleep(for: .seconds(2))
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
         }
     }
 
     private func answer(_ prompt: String) async throws -> ClaudeCodeResult {
         if let launchError = await launch.value { throw launchError }
-        let status: Int32
-        let output: Data
-        let errors: Data
-        (status, output, errors) = await withTaskCancellationHandler {
-            async let output = Self.readToEnd(stdout.fileHandleForReading)
-            async let errors = Self.readToEnd(stderr.fileHandleForReading)
-            await Self.send(prompt, to: stdin.fileHandleForWriting)
-            return (await exitStatus.value(), await output, await errors)
-        } onCancel: { [process] in
-            if process.isRunning { process.terminate() }
-        }
-        try Task.checkCancellation()
-        return try ClaudeCodeOutput.parse(output, errors: errors, status: status,
+        async let output = Self.readToEnd(stdout.fileHandleForReading)
+        async let errors = Self.readToEnd(stderr.fileHandleForReading)
+        await Self.send(prompt, to: stdin.fileHandleForWriting)
+        let status = await Self.waitForExit(process)
+        return try ClaudeCodeOutput.parse(await output, errors: await errors, status: status,
                                           expectsStructuredOutput: expectsStructuredOutput)
     }
 
@@ -101,28 +105,13 @@ public final class ClaudeCodeSession: Sendable {
             }
         }
     }
-}
 
-/// The exit status from `Process.terminationHandler`, for any number of waiters.
-private final class ExitStatus: Sendable {
-    private let state = Mutex<(status: Int32?, waiters: [CheckedContinuation<Int32, Never>])>((nil, []))
-
-    func record(_ status: Int32) {
-        let waiters = state.withLock { state in
-            state.status = status
-            defer { state.waiters = [] }
-            return state.waiters
-        }
-        for waiter in waiters { waiter.resume(returning: status) }
-    }
-
-    func value() async -> Int32 {
-        await withCheckedContinuation { waiter in
-            let status = state.withLock { state in
-                if state.status == nil { state.waiters.append(waiter) }
-                return state.status
+    private static func waitForExit(_ process: Process) async -> Int32 {
+        await withCheckedContinuation { done in
+            DispatchQueue.global(qos: .userInitiated).async {
+                process.waitUntilExit()
+                done.resume(returning: process.terminationStatus)
             }
-            if let status { waiter.resume(returning: status) }
         }
     }
 }
