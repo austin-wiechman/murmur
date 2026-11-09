@@ -156,13 +156,13 @@ struct ClaudeCodeTests {
         let result = try await session.run("send it by friday")
         #expect(result.text == "Send it by Friday.")
     }
+}
 
-    private func fakeClaude(_ body: String) throws -> ClaudeCode {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let script = directory.appendingPathComponent("claude")
-        try ("#!/bin/sh\n" + body + "\n").write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        return ClaudeCode(executable: script)
-    }
+func fakeClaude(_ body: String) throws -> ClaudeCode {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let script = directory.appendingPathComponent("claude")
+    try ("#!/bin/sh\n" + body + "\n").write(to: script, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    return ClaudeCode(executable: script)
 }
