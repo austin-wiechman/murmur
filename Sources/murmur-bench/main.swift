@@ -3,6 +3,7 @@ import ClaudeCodeRunner
 import Foundation
 import MurmurCore
 import MurmurEngine
+import TranscriptCleanup
 
 let usage = """
 usage: murmur-bench cleanup <onDevice|claude> <transcripts.jsonl> [prompt.txt|default] [--warmup S] [--model M] [--limit S]

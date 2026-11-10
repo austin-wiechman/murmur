@@ -1,7 +1,7 @@
 import SwiftUI
 import Carbon.HIToolbox
-import MurmurCore
 import MurmurEngine
+import TranscriptCleanup
 
 /// The Settings window: a Liquid Glass sidebar over its sections.
 struct SettingsView: View {

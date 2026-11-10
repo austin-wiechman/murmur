@@ -12,7 +12,7 @@ Murmur is a hobby project I work on in my spare time, mostly with [Claude Code](
 
 ## Work on the code
 
-`Sources/MurmurCore` holds logic with no system dependencies, and `swift test` covers it. `Sources/MurmurEngine` holds audio capture, transcription, and the cleanup engines. `Sources/Murmur` is the app itself.
+`Sources/MurmurCore` holds logic with no system dependencies, and `swift test` covers it. `Sources/MurmurEngine` holds audio capture, transcription, and the Claude cleanup engine. `Sources/Murmur` is the app itself. Three libraries are published for other apps to reuse: `ClaudeCodeRunner` runs the `claude` CLI, `TranscriptCleanup` holds the cleanup prompt, guard, and on-device cleaner, and `SpeechModels` locates the shared speech-model downloads.
 
 To try a change, run `./scripts/install.sh --dev`. It installs a development copy named Murmur Dev in `/Applications/Murmur Dev.app`, with its own bundle ID and no update feed. It gets its own permissions and never updates itself, so it can sit beside an installed release. Both copies answer the same shortcut, so installing one quits the other. To build `build/Murmur.app` without installing it, run `./scripts/build-app.sh`.
 

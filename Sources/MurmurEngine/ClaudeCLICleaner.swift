@@ -1,6 +1,6 @@
 import ClaudeCodeRunner
 import Foundation
-import MurmurCore
+import TranscriptCleanup
 
 /// Cleans up through the user's own Claude Code login.
 ///
@@ -31,6 +31,7 @@ public struct ClaudeCLICleaner: Cleaner {
             } catch let error as ClaudeCodeError {
                 switch error {
                 case .notInstalled, .launchFailed: throw CleanupError.unavailable(error.description)
+                // Keeps the "claude: …" note History showed before the runner split sign-out out.
                 case .signedOut(let message): throw CleanupError.failed(ClaudeCodeError.failed(message).description)
                 default: throw CleanupError.failed(error.description)
                 }
