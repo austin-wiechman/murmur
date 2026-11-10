@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import ClaudeCodeRunner
 import MurmurCore
 import MurmurEngine
 import Observation
@@ -403,8 +404,7 @@ final class DictationController: AppActions {
         if let url = claudeExecutable, FileManager.default.isExecutableFile(atPath: url.path) { return }
         findingClaude = true
         Task {
-            // Off the main thread: `locate()` can fall back to running a login shell.
-            let url = await Task.detached { ClaudeCLICleaner.locate() }.value
+            let url = await ClaudeCode.locate()
             findingClaude = false
             claudeLookup = url.map(ClaudeLookup.found) ?? .missing
         }

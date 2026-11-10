@@ -1,4 +1,5 @@
 import AVFoundation
+import ClaudeCodeRunner
 import Foundation
 import MurmurCore
 import MurmurEngine
@@ -77,7 +78,7 @@ let limit = args.firstIndex(of: "--limit").flatMap { Double(args[$0 + 1]) } ?? 3
 let warmup = args.firstIndex(of: "--warmup").flatMap { Double(args[$0 + 1]) } ?? 3
 
 let model = args.firstIndex(of: "--model").map { args[$0 + 1] } ?? "haiku"
-let cleaner: Cleaner = engine == .claude ? ClaudeCLICleaner(model: model) : FoundationModelsCleaner()
+let cleaner: Cleaner = engine == .claude ? ClaudeCLICleaner(model: model, executable: await ClaudeCode.locate()) : FoundationModelsCleaner()
 for line in lines {
     guard let obj = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
           let raw = obj["raw"] as? String else { continue }
