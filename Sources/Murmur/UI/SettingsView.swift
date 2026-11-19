@@ -64,6 +64,10 @@ struct GeneralSettings: View {
                     Text("Keep microphone ready")
                     Text("The next dictation starts instantly; the mic indicator stays on")
                 }
+                Toggle(isOn: $prefs.voiceIsolation) {
+                    Text("Isolate my voice")
+                    Text("Ignores what your speakers play and background noise; other audio may dip slightly")
+                }
                 Toggle(isOn: $prefs.showLiveWords) {
                     Text("Show live words")
                     Text("One line of what is heard, next to the pill")

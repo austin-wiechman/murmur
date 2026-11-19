@@ -17,6 +17,7 @@ final class Preferences {
     var hotkeys: [Hotkey] { didSet { save(try? JSONEncoder().encode(hotkeys), "hotkeys") } }
     var holdToTalk: Bool { didSet { save(holdToTalk, "holdToTalk") } }
     var keepMicWarmSeconds: Double { didSet { save(keepMicWarmSeconds, "keepMicWarmSeconds") } }
+    var voiceIsolation: Bool { didSet { save(voiceIsolation, "voiceIsolation") } }
     var showLiveWords: Bool { didSet { save(showLiveWords, "showLiveWords") } }
     var startSound: Bool { didSet { save(startSound, "startSound") } }
     var cleanupEngine: CleanupEngine { didSet { save(cleanupEngine.rawValue, "cleanupEngine") } }
@@ -33,6 +34,7 @@ final class Preferences {
             .flatMap { $0.isEmpty ? nil : $0 } ?? Hotkey.defaults
         holdToTalk = defaults.object(forKey: "holdToTalk") as? Bool ?? true
         keepMicWarmSeconds = defaults.object(forKey: "keepMicWarmSeconds") as? Double ?? 60
+        voiceIsolation = defaults.object(forKey: "voiceIsolation") as? Bool ?? true
         showLiveWords = defaults.object(forKey: "showLiveWords") as? Bool ?? false
         startSound = defaults.object(forKey: "startSound") as? Bool ?? true
         cleanupEngine = CleanupEngine(rawValue: defaults.string(forKey: "cleanupEngine") ?? "") ?? .onDevice

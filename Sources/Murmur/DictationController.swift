@@ -63,6 +63,7 @@ final class DictationController: AppActions {
 
     func start() {
         applyPreferences()
+        audio.prepare()
         hotkeys.onEvent = { [weak self] event, time in self?.handle(event, at: time) }
         watchPermissions()
         startHotkeys()
@@ -111,6 +112,7 @@ final class DictationController: AppActions {
         hotkeys.hotkeys = preferences.hotkeys
         machine.holdThreshold = preferences.holdToTalk ? 0.25 : .infinity
         audio.keepWarm = preferences.keepMicWarmSeconds
+        audio.voiceProcessing = preferences.voiceIsolation
         if preferences.hotkeys.contains(.globe) { GlobeKeyGuard.engage() } else { GlobeKeyGuard.release() }
     }
 
@@ -476,7 +478,10 @@ final class DictationController: AppActions {
 
     private func refreshPermissions() {
         if statusStore.accessibility != Permissions.accessibility { statusStore.accessibility = Permissions.accessibility }
-        if statusStore.microphone != Permissions.microphone { statusStore.microphone = Permissions.microphone }
+        if statusStore.microphone != Permissions.microphone {
+            statusStore.microphone = Permissions.microphone
+            if statusStore.microphone == .authorized { audio.prepare() }
+        }
         statusStore.setup.accessibility = statusStore.accessibility
         statusStore.setup.microphone = statusStore.microphone == .authorized
     }

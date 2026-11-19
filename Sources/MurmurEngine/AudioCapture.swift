@@ -1,5 +1,7 @@
 import AVFoundation
 import Accelerate
+import CoreAudio
+import MurmurCore
 import ObjCExceptionCatcher
 
 /// Microphone capture converted to 16 kHz mono Float32, the format Parakeet expects.
@@ -32,6 +34,29 @@ public final class AudioCapture: @unchecked Sendable {
     private var retiredEngines: [AVAudioEngine] = []
 
     public var keepWarm: TimeInterval = 60
+    /// Apple's voice processing: cancels what the speakers play and suppresses background noise.
+    /// It can only change while the engine is stopped, so a change stops and prepares an idle
+    /// engine now and switches a warm one at the next `start`.
+    public var voiceProcessing = false {
+        didSet {
+            guard voiceProcessing != oldValue else { return }
+            let voiceProcessing = voiceProcessing
+            engineQueue.async { [self] in
+                engineState.settingChanged()
+                guard lock.withLock({ sink == nil }) else { return }
+                stopEngine()
+                prepareStoppedEngine(voiceProcessing: voiceProcessing)
+            }
+        }
+    }
+    /// The mode the running engine was asked for. Only touched on `engineQueue`.
+    private var startedWithVoiceProcessing = false
+    /// What the current engine is bound to. Its voice processing flag also lets the off path skip
+    /// `inputNode`, which would create the node. Only touched on `engineQueue`.
+    private var engineState = MicEngineState()
+    /// When the engine went live for the current take; a slow start doesn't count as a silent take.
+    /// Only touched on `engineQueue`.
+    private var liveSince: Date?
 
     public init() {}
 
@@ -45,16 +70,86 @@ public final class AudioCapture: @unchecked Sendable {
             squaresSinceRead = 0
             framesSinceRead = 0
         }
+        let wanted = voiceProcessing
         engineQueue.async { [self] in
             cooldown?.cancel()
+            liveSince = nil
+            let route = Self.currentRoute()
+            guard route.input != kAudioObjectUnknown else {
+                stopEngine()
+                started(CaptureError.noInputDevice)
+                return
+            }
+            let voiceProcessing = wanted && engineState.allowsVoiceProcessing(on: route)
+            retireIfRouteChanged(route)
+            if engine.isRunning, startedWithVoiceProcessing != voiceProcessing { stopEngine() }
             do {
-                if !engine.isRunning { try startEngineReplacingIfStale() }
+                if !engine.isRunning { try startEngineReplacingIfStale(voiceProcessing: voiceProcessing) }
+                liveSince = Date()
                 started(nil)
             } catch {
                 stopEngine()
                 started(error)
             }
         }
+    }
+
+    /// Switches voice processing on a stopped engine ahead of the first `start`, which would
+    /// otherwise wait about a second for it. The mic stays off, and without mic access this does
+    /// nothing, so it never prompts.
+    public func prepare() {
+        guard voiceProcessing else { return }
+        engineQueue.async { [self] in prepareStoppedEngine(voiceProcessing: true) }
+    }
+
+    private func prepareStoppedEngine(voiceProcessing wanted: Bool) {
+        let route = Self.currentRoute()
+        let voiceProcessing = wanted && engineState.allowsVoiceProcessing(on: route)
+        guard !engine.isRunning, route.input != kAudioObjectUnknown,
+              AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
+        retireIfRouteChanged(route)
+        setVoiceProcessing(voiceProcessing)
+    }
+
+    /// With voice processing the node's format no longer follows the hardware, so a tap on an
+    /// engine left on old devices can succeed and deliver nothing; a changed route gets a new one.
+    private func retireIfRouteChanged(_ route: AudioRoute) {
+        guard engineState.needsNewEngine(on: route, engineRunning: engine.isRunning) else { return }
+        retireEngine()
+    }
+
+    private func retireEngine() {
+        stopEngine()
+        // Retired engines live as long as the process, so none keeps a voice processing unit.
+        if engineState.voiceProcessing { try? ObjCExceptionCatcher.setVoiceProcessing(on: engine, enabled: false) }
+        retiredEngines.append(engine)
+        engine = AVAudioEngine()
+        engineState.replaced()
+    }
+
+    private static func currentRoute() -> AudioRoute {
+        let input = defaultDevice(kAudioHardwarePropertyDefaultInputDevice)
+        return AudioRoute(input: input, inputRate: nominalRate(of: input),
+                          output: defaultDevice(kAudioHardwarePropertyDefaultOutputDevice))
+    }
+
+    private static func nominalRate(of device: AudioObjectID) -> Double {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var rate: Float64 = 0
+        var size = UInt32(MemoryLayout<Float64>.size)
+        AudioObjectGetPropertyData(device, &address, 0, nil, &size, &rate)
+        return rate
+    }
+
+    private static func defaultDevice(_ selector: AudioObjectPropertySelector) -> AudioObjectID {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var device = AudioObjectID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
+        return device
     }
 
     /// Stops recording and returns how many frames were captured since `start`.
@@ -64,8 +159,14 @@ public final class AudioCapture: @unchecked Sendable {
             sink = nil
             return framesCaptured
         }
+        let stopped = Date()
         let keepWarm = keepWarm
-        engineQueue.async { [self] in scheduleShutdown(after: keepWarm) }
+        engineQueue.async { [self] in
+            let live = liveSince.map { max(0, stopped.timeIntervalSince($0)) } ?? 0
+            liveSince = nil
+            engineState.takeEnded(frames: captured, seconds: live)
+            scheduleShutdown(after: keepWarm)
+        }
         return captured
     }
 
@@ -94,24 +195,39 @@ public final class AudioCapture: @unchecked Sendable {
         converter = nil
     }
 
-    private func startEngineReplacingIfStale() throws {
+    /// A replacement engine hasn't been prepared, so its start pays the voice processing enable.
+    /// If voice processing turns on but the engine won't start twice, a plain start is tried.
+    private func startEngineReplacingIfStale(voiceProcessing: Bool) throws {
         do {
-            try startEngine()
+            try startEngine(voiceProcessing: voiceProcessing)
         } catch {
-            stopEngine()
-            retiredEngines.append(engine)
-            engine = AVAudioEngine()
-            try startEngine()
+            retireEngine()
+            do {
+                try startEngine(voiceProcessing: voiceProcessing)
+            } catch let error where voiceProcessing && error as? CaptureError != .noInputDevice {
+                let failedRoute = engineState.voiceProcessing ? engineState.route : nil
+                retireEngine()
+                try startEngine(voiceProcessing: false)
+                guard let failedRoute else { return }
+                engineState.voiceProcessingFailed(on: failedRoute)
+                NSLog("Murmur: the mic only starts without voice processing; using the plain mic on these devices: \(error)")
+            }
         }
     }
 
-    private func startEngine() throws {
+    private func startEngine(voiceProcessing: Bool) throws {
+        engineState.usedInput(on: Self.currentRoute())
+        setVoiceProcessing(voiceProcessing)
+        startedWithVoiceProcessing = voiceProcessing
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
             throw CaptureError.noInputDevice
         }
         converter = AVAudioConverter(from: format, to: target)
+        // Voice processing delivers four identical discrete channels, which the converter's
+        // default mapping turns into silence. Plain stereo input already maps channel 0.
+        converter?.channelMap = [0]
         input.removeTap(onBus: 0)
         // AVFAudio raises instead of throwing when the format no longer matches the device.
         try ObjCExceptionCatcher.installTap(on: input, bus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
@@ -120,6 +236,23 @@ public final class AudioCapture: @unchecked Sendable {
         inputTapped = true
         engine.prepare()
         try engine.start()
+    }
+
+    /// The first enable takes about a second; the node keeps it across stops, so later starts skip
+    /// that. If it can't be enabled, capture carries on with the plain mic.
+    private func setVoiceProcessing(_ enabled: Bool) {
+        guard enabled != engineState.voiceProcessing else { return }
+        // Read before the switch, which binds the node and takes about a second.
+        let route = Self.currentRoute()
+        do {
+            // AVFAudio raises instead of throwing for some device states, and this runs at launch.
+            try ObjCExceptionCatcher.setVoiceProcessing(on: engine, enabled: enabled)
+        } catch {
+            NSLog("Murmur: couldn't turn voice processing \(enabled ? "on" : "off"): \(error)")
+        }
+        // A failure can come after the switch, such as in the ducking setter, so ask the node.
+        let isEnabled = ObjCExceptionCatcher.isVoiceProcessingEnabled(on: engine)
+        engineState.voiceProcessingChanged(to: isEnabled, on: route)
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer) {
