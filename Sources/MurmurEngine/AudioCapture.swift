@@ -23,7 +23,6 @@ public final class AudioCapture: @unchecked Sendable {
     private var converter: AVAudioConverter?
     private var sink: ((AVAudioPCMBuffer) -> Void)?
     private var framesCaptured = 0
-    private var takeStarted = Date()
     private var squaresSinceRead: Float = 0
     private var framesSinceRead = 0
     private var cooldown: DispatchWorkItem?
@@ -55,6 +54,9 @@ public final class AudioCapture: @unchecked Sendable {
     /// What the current engine is bound to. Its voice processing flag also lets the off path skip
     /// `inputNode`, which would create the node. Only touched on `engineQueue`.
     private var engineState = MicEngineState()
+    /// When the engine went live for the current take; a slow start doesn't count as a silent take.
+    /// Only touched on `engineQueue`.
+    private var liveSince: Date?
 
     public init() {}
 
@@ -65,13 +67,13 @@ public final class AudioCapture: @unchecked Sendable {
         lock.withLock {
             self.sink = sink
             framesCaptured = 0
-            takeStarted = Date()
             squaresSinceRead = 0
             framesSinceRead = 0
         }
         let wanted = voiceProcessing
         engineQueue.async { [self] in
             cooldown?.cancel()
+            liveSince = nil
             let route = Self.currentRoute()
             guard route.input != kAudioObjectUnknown else {
                 stopEngine()
@@ -83,6 +85,7 @@ public final class AudioCapture: @unchecked Sendable {
             if engine.isRunning, startedWithVoiceProcessing != voiceProcessing { stopEngine() }
             do {
                 if !engine.isRunning { try startEngineReplacingIfStale(voiceProcessing: voiceProcessing) }
+                liveSince = Date()
                 started(nil)
             } catch {
                 stopEngine()
@@ -152,13 +155,16 @@ public final class AudioCapture: @unchecked Sendable {
     /// Stops recording and returns how many frames were captured since `start`.
     @discardableResult
     public func stop() -> Int {
-        let (captured, seconds) = lock.withLock {
+        let captured = lock.withLock {
             sink = nil
-            return (framesCaptured, Date().timeIntervalSince(takeStarted))
+            return framesCaptured
         }
+        let stopped = Date()
         let keepWarm = keepWarm
         engineQueue.async { [self] in
-            engineState.takeEnded(frames: captured, seconds: seconds)
+            let live = liveSince.map { max(0, stopped.timeIntervalSince($0)) } ?? 0
+            liveSince = nil
+            engineState.takeEnded(frames: captured, seconds: live)
             scheduleShutdown(after: keepWarm)
         }
         return captured
