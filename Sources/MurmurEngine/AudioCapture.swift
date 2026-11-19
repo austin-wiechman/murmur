@@ -207,11 +207,11 @@ public final class AudioCapture: @unchecked Sendable {
             do {
                 try startEngine(voiceProcessing: voiceProcessing)
             } catch let error where voiceProcessing && error as? CaptureError != .noInputDevice {
-                let triedVoiceProcessing = engineState.voiceProcessing
+                let failedRoute = engineState.voiceProcessing ? engineState.route : nil
                 retireEngine()
                 try startEngine(voiceProcessing: false)
-                guard triedVoiceProcessing else { return }
-                engineState.voiceProcessingFailed(on: Self.currentRoute())
+                guard let failedRoute else { return }
+                engineState.voiceProcessingFailed(on: failedRoute)
                 NSLog("Murmur: the mic only starts without voice processing; using the plain mic on these devices: \(error)")
             }
         }
