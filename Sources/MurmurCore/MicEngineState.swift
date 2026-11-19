@@ -7,7 +7,7 @@ public struct MicEngineState: Equatable, Sendable {
     public private(set) var route: AudioRoute?
     public private(set) var voiceProcessing = false
     /// Where voice processing turned on but the engine wouldn't start. That route records from the
-    /// plain mic until the devices or the setting change; it survives replacing the engine.
+    /// plain mic until the setting changes, even after other devices are used in between.
     public private(set) var voiceProcessingFailedOn: AudioRoute?
     /// A voice processing take of a second or more delivered no audio, which a stale engine does
     /// without failing; a shorter take may just have ended before the first buffer.
