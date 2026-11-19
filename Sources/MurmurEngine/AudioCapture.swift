@@ -56,6 +56,9 @@ public final class AudioCapture: @unchecked Sendable {
     /// The devices the current engine was set up on; nil until its input node is first used.
     /// Only touched on `engineQueue`.
     private var engineRoute: AudioRoute?
+    /// Set when the mic started only without voice processing; the rest of the session records
+    /// plain. Only touched on `engineQueue`.
+    private var voiceProcessingUnavailable = false
 
     public init() {}
 
@@ -69,9 +72,10 @@ public final class AudioCapture: @unchecked Sendable {
             squaresSinceRead = 0
             framesSinceRead = 0
         }
-        let voiceProcessing = voiceProcessing
+        let wanted = voiceProcessing
         engineQueue.async { [self] in
             cooldown?.cancel()
+            let voiceProcessing = wanted && !voiceProcessingUnavailable
             retireIfRouteChanged(Self.currentRoute())
             if engine.isRunning, startedWithVoiceProcessing != voiceProcessing { stopEngine() }
             do {
@@ -92,7 +96,8 @@ public final class AudioCapture: @unchecked Sendable {
         engineQueue.async { [self] in prepareStoppedEngine(voiceProcessing: true) }
     }
 
-    private func prepareStoppedEngine(voiceProcessing: Bool) {
+    private func prepareStoppedEngine(voiceProcessing wanted: Bool) {
+        let voiceProcessing = wanted && !voiceProcessingUnavailable
         let route = Self.currentRoute()
         guard !engine.isRunning, route.input != kAudioObjectUnknown,
               AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
@@ -169,12 +174,20 @@ public final class AudioCapture: @unchecked Sendable {
     }
 
     /// A replacement engine hasn't been prepared, so its start pays the voice processing enable.
+    /// If voice processing turns on but the engine won't start twice, a plain start is tried.
     private func startEngineReplacingIfStale(voiceProcessing: Bool) throws {
         do {
             try startEngine(voiceProcessing: voiceProcessing)
         } catch {
             retireEngine()
-            try startEngine(voiceProcessing: voiceProcessing)
+            do {
+                try startEngine(voiceProcessing: voiceProcessing)
+            } catch where voiceProcessing {
+                retireEngine()
+                try startEngine(voiceProcessing: false)
+                voiceProcessingUnavailable = true
+                NSLog("Murmur: the mic only starts without voice processing, so this session records without it: \(error)")
+            }
         }
     }
 
