@@ -23,6 +23,7 @@ public final class AudioCapture: @unchecked Sendable {
     private var converter: AVAudioConverter?
     private var sink: ((AVAudioPCMBuffer) -> Void)?
     private var framesCaptured = 0
+    private var takeStarted = Date()
     private var squaresSinceRead: Float = 0
     private var framesSinceRead = 0
     private var cooldown: DispatchWorkItem?
@@ -64,6 +65,7 @@ public final class AudioCapture: @unchecked Sendable {
         lock.withLock {
             self.sink = sink
             framesCaptured = 0
+            takeStarted = Date()
             squaresSinceRead = 0
             framesSinceRead = 0
         }
@@ -143,12 +145,15 @@ public final class AudioCapture: @unchecked Sendable {
     /// Stops recording and returns how many frames were captured since `start`.
     @discardableResult
     public func stop() -> Int {
-        let captured = lock.withLock {
+        let (captured, seconds) = lock.withLock {
             sink = nil
-            return framesCaptured
+            return (framesCaptured, Date().timeIntervalSince(takeStarted))
         }
         let keepWarm = keepWarm
-        engineQueue.async { [self] in scheduleShutdown(after: keepWarm) }
+        engineQueue.async { [self] in
+            engineState.takeEnded(frames: captured, seconds: seconds)
+            scheduleShutdown(after: keepWarm)
+        }
         return captured
     }
 

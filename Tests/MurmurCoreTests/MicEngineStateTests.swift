@@ -59,6 +59,26 @@ struct MicEngineStateTests {
         #expect(state == MicEngineState())
     }
 
+    @Test func aSilentVoiceProcessingTakeReplacesTheEngine() {
+        var state = MicEngineState()
+        state.voiceProcessingChanged(to: true, on: micX)
+        state.takeEnded(frames: 0, seconds: 0.3)
+        #expect(!state.needsNewEngine(on: micX, engineRunning: true))
+
+        state.takeEnded(frames: 0, seconds: 4)
+        #expect(state.needsNewEngine(on: micX, engineRunning: true))
+
+        state.replaced()
+        #expect(!state.needsNewEngine(on: micX, engineRunning: false))
+    }
+
+    @Test func aSilentPlainTakeKeepsTheEngine() {
+        var state = MicEngineState()
+        state.usedInput(on: micX)
+        state.takeEnded(frames: 0, seconds: 4)
+        #expect(!state.needsNewEngine(on: micX, engineRunning: false))
+    }
+
     @Test func aVoiceProcessingFailureHoldsOnlyForItsRouteUntilTheSettingChanges() {
         var state = MicEngineState()
         state.voiceProcessingFailed(on: micX)
