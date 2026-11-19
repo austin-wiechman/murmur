@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/austin-wiechman/murmur/compare/v0.2.0...v0.3.0) (2026-11-19)
+
+
+### Features
+
+* isolate the user's voice from speaker audio ([#9](https://github.com/austin-wiechman/murmur/issues/9)) ([72a5270](https://github.com/austin-wiechman/murmur/commit/72a5270e90494e32dbf667fafecc73ae230035d0))
+
+
+### Bug Fixes
+
+* fall back to the plain mic when voice isolation can't record ([#11](https://github.com/austin-wiechman/murmur/issues/11)) ([93dd77d](https://github.com/austin-wiechman/murmur/commit/93dd77dab6c5d9d6753e95ef6a20d9bbbf20a3c9))
+* stop crashing when the microphone switches to a different sample rate ([#8](https://github.com/austin-wiechman/murmur/issues/8)) ([252a2b8](https://github.com/austin-wiechman/murmur/commit/252a2b8f0629efab8f30451a6a8534900115d954))
+
 ## [0.2.0](https://github.com/austin-wiechman/murmur/compare/v0.1.1...v0.2.0) (2026-11-10)
 
 
