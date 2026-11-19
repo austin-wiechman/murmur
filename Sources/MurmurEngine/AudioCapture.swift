@@ -114,10 +114,8 @@ public final class AudioCapture: @unchecked Sendable {
         converter = AVAudioConverter(from: format, to: target)
         input.removeTap(onBus: 0)
         // AVFAudio raises instead of throwing when the format no longer matches the device.
-        try ObjCExceptionCatcher.catchException {
-            input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-                self?.handle(buffer)
-            }
+        try ObjCExceptionCatcher.installTap(on: input, bus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            self?.handle(buffer)
         }
         inputTapped = true
         engine.prepare()

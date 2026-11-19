@@ -1,3 +1,4 @@
+import AVFAudio
 import Foundation
 import ObjCExceptionCatcher
 import Testing
@@ -17,4 +18,10 @@ import Testing
     var ran = false
     try ObjCExceptionCatcher.catchException { ran = true }
     #expect(ran)
+}
+
+@Test func tapOnADetachedNodeThrowsInsteadOfAborting() {
+    #expect(throws: NSError.self) {
+        try ObjCExceptionCatcher.installTap(on: AVAudioPlayerNode(), bus: 0, bufferSize: 1024, format: nil) { _, _ in }
+    }
 }

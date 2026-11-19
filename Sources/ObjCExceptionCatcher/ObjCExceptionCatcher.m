@@ -16,4 +16,15 @@
     }
 }
 
++ (BOOL)installTapOnNode:(AVAudioNode *)node
+                     bus:(AVAudioNodeBus)bus
+              bufferSize:(AVAudioFrameCount)bufferSize
+                  format:(AVAudioFormat *)format
+                   block:(AVAudioNodeTapBlock)block
+                   error:(NSError **)error {
+    return [self catchException:^{
+        [node installTapOnBus:bus bufferSize:bufferSize format:format block:block];
+    } error:error];
+}
+
 @end
