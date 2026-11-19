@@ -27,6 +27,9 @@ public final class AudioCapture: @unchecked Sendable {
     /// Reading `engine.inputNode` asks macOS for the microphone, so stopping never touches it
     /// unless a start already did. Only touched on `engineQueue`.
     private var inputTapped = false
+    /// Engines replaced after a failed start. Freeing one while AVFAudio still delivers a device change to it
+    /// segfaults, so they live as long as the process. Only touched on `engineQueue`.
+    private var retiredEngines: [AVAudioEngine] = []
 
     public var keepWarm: TimeInterval = 60
 
@@ -96,10 +99,8 @@ public final class AudioCapture: @unchecked Sendable {
             try startEngine()
         } catch {
             stopEngine()
-            let stale = engine
+            retiredEngines.append(engine)
             engine = AVAudioEngine()
-            // Freeing an engine while its device change is still being delivered crashes in AVFAudio.
-            engineQueue.asyncAfter(deadline: .now() + 10) { withExtendedLifetime(stale) {} }
             try startEngine()
         }
     }
