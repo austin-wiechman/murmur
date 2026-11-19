@@ -111,6 +111,7 @@ final class DictationController: AppActions {
         hotkeys.hotkeys = preferences.hotkeys
         machine.holdThreshold = preferences.holdToTalk ? 0.25 : .infinity
         audio.keepWarm = preferences.keepMicWarmSeconds
+        audio.voiceProcessing = preferences.voiceIsolation
         if preferences.hotkeys.contains(.globe) { GlobeKeyGuard.engage() } else { GlobeKeyGuard.release() }
     }
 
