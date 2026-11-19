@@ -63,7 +63,6 @@ final class DictationController: AppActions {
 
     func start() {
         applyPreferences()
-        audio.prepare()
         hotkeys.onEvent = { [weak self] event, time in self?.handle(event, at: time) }
         watchPermissions()
         startHotkeys()
