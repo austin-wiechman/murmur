@@ -102,7 +102,6 @@ public final class AudioCapture: @unchecked Sendable {
         guard !engine.isRunning, route.input != kAudioObjectUnknown,
               AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
         retireIfRouteChanged(route)
-        if engineRoute == nil, voiceProcessing { engineRoute = route }
         setVoiceProcessing(voiceProcessing)
     }
 
@@ -240,6 +239,7 @@ public final class AudioCapture: @unchecked Sendable {
             return
         }
         voiceProcessingOnEngine = enabled
+        if enabled { engineRoute = Self.currentRoute() }
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer) {
