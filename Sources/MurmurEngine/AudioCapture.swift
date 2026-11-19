@@ -128,17 +128,16 @@ public final class AudioCapture: @unchecked Sendable {
 
     private static func currentRoute() -> AudioRoute {
         let system = AudioObjectID(kAudioObjectSystemObject), unknown = AudioObjectID(kAudioObjectUnknown)
-        let input = property(kAudioHardwarePropertyDefaultInputDevice, of: system, initial: unknown)
-        return AudioRoute(input: input, inputRate: property(kAudioDevicePropertyNominalSampleRate, of: input, initial: 0),
-                          output: property(kAudioHardwarePropertyDefaultOutputDevice, of: system, initial: unknown))
+        let input = property(kAudioHardwarePropertyDefaultInputDevice, of: system, fallback: unknown)
+        return AudioRoute(input: input, inputRate: property(kAudioDevicePropertyNominalSampleRate, of: input, fallback: 0),
+                          output: property(kAudioHardwarePropertyDefaultOutputDevice, of: system, fallback: unknown))
     }
 
-    /// `initial` is what the caller sees when the read fails.
     private static func property<Value: BitwiseCopyable>(_ selector: AudioObjectPropertySelector, of object: AudioObjectID,
-                                        initial: Value) -> Value {
+                                        fallback: Value) -> Value {
         var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
                                                  mElement: kAudioObjectPropertyElementMain)
-        var value = initial
+        var value = fallback
         var size = UInt32(MemoryLayout<Value>.size)
         AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value)
         return value
