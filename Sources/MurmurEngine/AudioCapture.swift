@@ -50,12 +50,9 @@ public final class AudioCapture: @unchecked Sendable {
     }
     /// The mode the running engine was asked for. Only touched on `engineQueue`.
     private var startedWithVoiceProcessing = false
-    /// Whether the current engine's input node has voice processing on, so the off path can skip
+    /// What the current engine is bound to. Its voice processing flag also lets the off path skip
     /// `inputNode`, which would create the node. Only touched on `engineQueue`.
-    private var voiceProcessingOnEngine = false
-    /// The devices the current engine was set up on; nil until its input node is first used.
-    /// Only touched on `engineQueue`.
-    private var engineRoute: AudioRoute?
+    private var engineState = MicEngineState()
     /// Set when the mic started only without voice processing; the rest of the session records
     /// plain. Only touched on `engineQueue`.
     private var voiceProcessingUnavailable = false
@@ -108,8 +105,7 @@ public final class AudioCapture: @unchecked Sendable {
     /// With voice processing the node's format no longer follows the hardware, so a tap on an
     /// engine left on old devices can succeed and deliver nothing; a changed route gets a new one.
     private func retireIfRouteChanged(_ route: AudioRoute) {
-        guard let engineRoute, route.needsNewEngine(builtOn: engineRoute, voiceProcessing: voiceProcessingOnEngine)
-        else { return }
+        guard engineState.needsNewEngine(on: route) else { return }
         retireEngine()
     }
 
@@ -117,8 +113,7 @@ public final class AudioCapture: @unchecked Sendable {
         stopEngine()
         retiredEngines.append(engine)
         engine = AVAudioEngine()
-        voiceProcessingOnEngine = false
-        engineRoute = nil
+        engineState.replaced()
     }
 
     private static func currentRoute() -> AudioRoute {
@@ -191,7 +186,7 @@ public final class AudioCapture: @unchecked Sendable {
     }
 
     private func startEngine(voiceProcessing: Bool) throws {
-        if engineRoute == nil { engineRoute = Self.currentRoute() }
+        engineState.usedInput(on: Self.currentRoute())
         setVoiceProcessing(voiceProcessing)
         startedWithVoiceProcessing = voiceProcessing
         let input = engine.inputNode
@@ -216,7 +211,7 @@ public final class AudioCapture: @unchecked Sendable {
     /// The first enable takes about a second; the node keeps it across stops, so later starts skip
     /// that. If it can't be enabled, capture carries on with the plain mic.
     private func setVoiceProcessing(_ enabled: Bool) {
-        guard enabled != voiceProcessingOnEngine else { return }
+        guard enabled != engineState.voiceProcessing else { return }
         let input = engine.inputNode
         var thrown: Error?
         do {
@@ -238,8 +233,7 @@ public final class AudioCapture: @unchecked Sendable {
             NSLog("Murmur: couldn't turn voice processing \(enabled ? "on" : "off"): \(thrown)")
             return
         }
-        voiceProcessingOnEngine = enabled
-        if enabled { engineRoute = Self.currentRoute() }
+        engineState.voiceProcessingChanged(to: enabled, on: Self.currentRoute())
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer) {

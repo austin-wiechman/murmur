@@ -1,0 +1,29 @@
+/// What the capture engine is bound to, so `AudioCapture` knows when to build a new one.
+///
+/// An engine stays on the input it first used. With voice processing on it is also bound to the
+/// output that was current when voice processing turned on, whose sound it cancels.
+public struct MicEngineState: Equatable, Sendable {
+    /// Nil until the engine's input node is first used.
+    public private(set) var route: AudioRoute?
+    public private(set) var voiceProcessing = false
+
+    public init() {}
+
+    public func needsNewEngine(on now: AudioRoute) -> Bool {
+        guard let route else { return false }
+        return now.input != route.input || (voiceProcessing && now.output != route.output)
+    }
+
+    public mutating func usedInput(on now: AudioRoute) {
+        if route == nil { route = now }
+    }
+
+    public mutating func voiceProcessingChanged(to enabled: Bool, on now: AudioRoute) {
+        voiceProcessing = enabled
+        if enabled || route == nil { route = now }
+    }
+
+    public mutating func replaced() {
+        self = MicEngineState()
+    }
+}
