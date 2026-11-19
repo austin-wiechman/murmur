@@ -1,5 +1,6 @@
 import AVFoundation
 import Accelerate
+import ObjCExceptionCatcher
 
 /// Microphone capture converted to 16 kHz mono Float32, the format Parakeet expects.
 ///
@@ -8,7 +9,9 @@ import Accelerate
 public final class AudioCapture: @unchecked Sendable {
     public static let sampleRate: Double = 16_000
 
-    private let engine = AVAudioEngine()
+    /// After the default input switches to a device with another sample rate, an engine can keep reporting the old
+    /// format, and tapping with it fails; a start that fails retries once on a new engine. Only touched on `engineQueue`.
+    private var engine = AVAudioEngine()
     private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: AudioCapture.sampleRate,
                                        channels: 1, interleaved: false)!
     private let lock = NSLock()
@@ -24,6 +27,9 @@ public final class AudioCapture: @unchecked Sendable {
     /// Reading `engine.inputNode` asks macOS for the microphone, so stopping never touches it
     /// unless a start already did. Only touched on `engineQueue`.
     private var inputTapped = false
+    /// Engines replaced after a failed start. Freeing one while AVFAudio still delivers a device change to it
+    /// segfaults, so they live as long as the process. Only touched on `engineQueue`.
+    private var retiredEngines: [AVAudioEngine] = []
 
     public var keepWarm: TimeInterval = 60
     /// Apple's voice processing: cancels what the speakers play and suppresses background noise.
@@ -60,9 +66,10 @@ public final class AudioCapture: @unchecked Sendable {
             cooldown?.cancel()
             if engine.isRunning, startedWithVoiceProcessing != voiceProcessing { stopEngine() }
             do {
-                if !engine.isRunning { try startEngine(voiceProcessing: voiceProcessing) }
+                if !engine.isRunning { try startEngineReplacingIfStale(voiceProcessing: voiceProcessing) }
                 started(nil)
             } catch {
+                stopEngine()
                 started(error)
             }
         }
@@ -118,6 +125,18 @@ public final class AudioCapture: @unchecked Sendable {
         converter = nil
     }
 
+    /// A replacement engine hasn't been prepared, so its start pays the voice processing enable.
+    private func startEngineReplacingIfStale(voiceProcessing: Bool) throws {
+        do {
+            try startEngine(voiceProcessing: voiceProcessing)
+        } catch {
+            stopEngine()
+            retiredEngines.append(engine)
+            engine = AVAudioEngine()
+            try startEngine(voiceProcessing: voiceProcessing)
+        }
+    }
+
     private func startEngine(voiceProcessing: Bool) throws {
         setVoiceProcessing(voiceProcessing)
         startedWithVoiceProcessing = voiceProcessing
@@ -131,7 +150,8 @@ public final class AudioCapture: @unchecked Sendable {
         // default mapping turns into silence. Plain stereo input already maps channel 0.
         converter?.channelMap = [0]
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        // AVFAudio raises instead of throwing when the format no longer matches the device.
+        try ObjCExceptionCatcher.installTap(on: input, bus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.handle(buffer)
         }
         inputTapped = true
