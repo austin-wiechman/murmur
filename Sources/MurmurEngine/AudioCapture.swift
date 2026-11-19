@@ -128,28 +128,21 @@ public final class AudioCapture: @unchecked Sendable {
     }
 
     private static func currentRoute() -> AudioRoute {
-        let input = defaultDevice(kAudioHardwarePropertyDefaultInputDevice)
-        return AudioRoute(input: input, inputRate: nominalRate(of: input),
-                          output: defaultDevice(kAudioHardwarePropertyDefaultOutputDevice))
+        let system = AudioObjectID(kAudioObjectSystemObject), unknown = AudioObjectID(kAudioObjectUnknown)
+        let input = property(kAudioHardwarePropertyDefaultInputDevice, of: system, initial: unknown)
+        return AudioRoute(input: input, inputRate: property(kAudioDevicePropertyNominalSampleRate, of: input, initial: 0),
+                          output: property(kAudioHardwarePropertyDefaultOutputDevice, of: system, initial: unknown))
     }
 
-    private static func nominalRate(of device: AudioObjectID) -> Double {
-        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate,
-                                                 mScope: kAudioObjectPropertyScopeGlobal,
-                                                 mElement: kAudioObjectPropertyElementMain)
-        var rate: Float64 = 0
-        var size = UInt32(MemoryLayout<Float64>.size)
-        AudioObjectGetPropertyData(device, &address, 0, nil, &size, &rate)
-        return rate
-    }
-
-    private static func defaultDevice(_ selector: AudioObjectPropertySelector) -> AudioObjectID {
+    /// `initial` is what the caller sees when the read fails.
+    private static func property<Value: BitwiseCopyable>(_ selector: AudioObjectPropertySelector, of object: AudioObjectID,
+                                        initial: Value) -> Value {
         var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
                                                  mElement: kAudioObjectPropertyElementMain)
-        var device = AudioObjectID(kAudioObjectUnknown)
-        var size = UInt32(MemoryLayout<AudioObjectID>.size)
-        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
-        return device
+        var value = initial
+        var size = UInt32(MemoryLayout<Value>.size)
+        AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value)
+        return value
     }
 
     /// Stops recording and returns how many frames were captured since `start`.
