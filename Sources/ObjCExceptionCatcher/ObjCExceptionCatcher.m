@@ -33,7 +33,9 @@
         AVAudioInputNode *input = engine.inputNode;
         NSError *failure = nil;
         if (![input setVoiceProcessingEnabled:enabled error:&failure]) {
-            thrown = failure;
+            thrown = failure ?: [NSError errorWithDomain:@"ObjCExceptionCatcher" code:-1 userInfo:@{
+                NSLocalizedDescriptionKey: @"setVoiceProcessingEnabled failed without an error",
+            }];
             return;
         }
         if (!enabled) return;
