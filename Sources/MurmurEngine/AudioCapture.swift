@@ -9,7 +9,9 @@ import ObjCExceptionCatcher
 public final class AudioCapture: @unchecked Sendable {
     public static let sampleRate: Double = 16_000
 
-    private let engine = AVAudioEngine()
+    /// Replaced on every start from stopped: after the default input switches to a device with another sample rate,
+    /// an engine keeps reporting the old format, and tapping with it fails. Only touched on `engineQueue`.
+    private var engine = AVAudioEngine()
     private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: AudioCapture.sampleRate,
                                        channels: 1, interleaved: false)!
     private let lock = NSLock()
@@ -43,7 +45,10 @@ public final class AudioCapture: @unchecked Sendable {
         engineQueue.async { [self] in
             cooldown?.cancel()
             do {
-                if !engine.isRunning { try startEngine() }
+                if !engine.isRunning {
+                    replaceEngine()
+                    try startEngine()
+                }
                 started(nil)
             } catch {
                 stopEngine()
@@ -87,6 +92,11 @@ public final class AudioCapture: @unchecked Sendable {
         inputTapped = false
         engine.stop()
         converter = nil
+    }
+
+    private func replaceEngine() {
+        stopEngine()
+        engine = AVAudioEngine()
     }
 
     private func startEngine() throws {
