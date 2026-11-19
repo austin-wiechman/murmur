@@ -244,6 +244,8 @@ public final class AudioCapture: @unchecked Sendable {
     /// that. If it can't be enabled, capture carries on with the plain mic.
     private func setVoiceProcessing(_ enabled: Bool) {
         guard enabled != engineState.voiceProcessing else { return }
+        // Read before the switch, which binds the node and takes about a second.
+        let route = Self.currentRoute()
         do {
             // AVFAudio raises instead of throwing for some device states, and this runs at launch.
             try ObjCExceptionCatcher.setVoiceProcessing(on: engine, enabled: enabled)
@@ -252,7 +254,7 @@ public final class AudioCapture: @unchecked Sendable {
         }
         // A failure can come after the switch, such as in the ducking setter, so ask the node.
         let isEnabled = ObjCExceptionCatcher.isVoiceProcessingEnabled(on: engine)
-        engineState.voiceProcessingChanged(to: isEnabled, on: Self.currentRoute())
+        engineState.voiceProcessingChanged(to: isEnabled, on: route)
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer) {
