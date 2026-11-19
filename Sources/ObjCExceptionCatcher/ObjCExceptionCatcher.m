@@ -27,4 +27,28 @@
     } error:error];
 }
 
++ (BOOL)setVoiceProcessingOnEngine:(AVAudioEngine *)engine enabled:(BOOL)enabled error:(NSError **)error {
+    __block NSError *thrown = nil;
+    BOOL returned = [self catchException:^{
+        AVAudioInputNode *input = engine.inputNode;
+        NSError *failure = nil;
+        if (![input setVoiceProcessingEnabled:enabled error:&failure]) {
+            thrown = failure;
+            return;
+        }
+        if (!enabled) return;
+        AVAudioVoiceProcessingOtherAudioDuckingConfiguration ducking = {
+            .enableAdvancedDucking = NO,
+            .duckingLevel = AVAudioVoiceProcessingOtherAudioDuckingLevelMin,
+        };
+        input.voiceProcessingOtherAudioDuckingConfiguration = ducking;
+    } error:error];
+    if (!returned) return NO;
+    if (thrown) {
+        if (error) *error = thrown;
+        return NO;
+    }
+    return YES;
+}
+
 @end

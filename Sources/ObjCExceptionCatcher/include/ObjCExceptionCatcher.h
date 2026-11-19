@@ -19,6 +19,11 @@ NS_ASSUME_NONNULL_BEGIN
                    block:(AVAudioNodeTapBlock)block
                    error:(NSError **)error;
 
+/// Turns voice processing on or off on the engine's input node and, when turning it on, keeps ducking of other audio
+/// to the minimum. Returns NO with an error where AVFAudio throws or raises, with no Swift frames in the unwind.
++ (BOOL)setVoiceProcessingOnEngine:(AVAudioEngine *)engine enabled:(BOOL)enabled error:(NSError **)error
+    NS_SWIFT_NAME(setVoiceProcessing(on:enabled:));
+
 @end
 
 NS_ASSUME_NONNULL_END

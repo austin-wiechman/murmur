@@ -236,25 +236,11 @@ public final class AudioCapture: @unchecked Sendable {
     /// that. If it can't be enabled, capture carries on with the plain mic.
     private func setVoiceProcessing(_ enabled: Bool) {
         guard enabled != engineState.voiceProcessing else { return }
-        let input = engine.inputNode
-        var thrown: Error?
         do {
             // AVFAudio raises instead of throwing for some device states, and this runs at launch.
-            try ObjCExceptionCatcher.catchException {
-                do {
-                    try input.setVoiceProcessingEnabled(enabled)
-                    guard enabled else { return }
-                    input.voiceProcessingOtherAudioDuckingConfiguration =
-                        AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
-                } catch {
-                    thrown = error
-                }
-            }
+            try ObjCExceptionCatcher.setVoiceProcessing(on: engine, enabled: enabled)
         } catch {
-            thrown = error
-        }
-        if let thrown {
-            NSLog("Murmur: couldn't turn voice processing \(enabled ? "on" : "off"): \(thrown)")
+            NSLog("Murmur: couldn't turn voice processing \(enabled ? "on" : "off"): \(error)")
             return
         }
         engineState.voiceProcessingChanged(to: enabled, on: Self.currentRoute())
