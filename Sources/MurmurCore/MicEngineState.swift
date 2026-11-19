@@ -9,12 +9,14 @@ public struct MicEngineState: Equatable, Sendable {
     /// Where voice processing wouldn't start, or stayed silent after a rebuild for silence. Those routes
     /// record from the plain mic until the setting changes, even after other devices are used in between.
     public private(set) var voiceProcessingFailedOn: Set<AudioRoute> = []
-    /// A voice processing take of a second or more delivered no audio, which a stale engine does
-    /// without failing; a shorter take may just have ended before the first buffer.
-    public private(set) var heardNothing = false
-    /// Set by a rebuild for silence and cleared once a take hears audio, so a route that never
-    /// delivers costs one rebuild rather than one per take.
-    public private(set) var rebuiltForSilence = false
+    /// A voice processing take of a second or more that delivers no audio means a stale engine, which
+    /// doesn't fail; a shorter take may just have ended before the first buffer. After one rebuild for
+    /// silence, a route that still delivers nothing falls back to the plain mic instead of rebuilding again.
+    private var silence = Silence.heard
+
+    private enum Silence: Equatable, Sendable {
+        case heard, heardNothing, rebuiltAwaitingAudio
+    }
 
     public init() {}
 
@@ -25,7 +27,7 @@ public struct MicEngineState: Equatable, Sendable {
     /// A running engine that rode out a rate change keeps going, so the rate only counts when it's
     /// stopped; that also ignores whatever rate a running voice processing engine reports.
     public func needsNewEngine(on now: AudioRoute, engineRunning: Bool) -> Bool {
-        if heardNothing { return true }
+        if silence == .heardNothing { return true }
         guard let route else { return false }
         if now.input != route.input { return true }
         if !engineRunning, now.inputRate != route.inputRate { return true }
@@ -42,17 +44,22 @@ public struct MicEngineState: Equatable, Sendable {
     }
 
     public mutating func replaced() {
-        if heardNothing { rebuiltForSilence = true }
+        if silence == .heardNothing { silence = .rebuiltAwaitingAudio }
         route = nil
         voiceProcessing = false
-        heardNothing = false
     }
 
     public mutating func takeEnded(frames: Int, seconds: Double) {
-        if frames > 0 { rebuiltForSilence = false }
-        let silent = voiceProcessing && frames == 0 && seconds >= 1
-        if silent, rebuiltForSilence, let route { voiceProcessingFailedOn.insert(route) }
-        heardNothing = silent && !rebuiltForSilence
+        if frames > 0 {
+            silence = .heard
+            return
+        }
+        let silent = voiceProcessing && seconds >= 1
+        guard silence == .rebuiltAwaitingAudio else {
+            silence = silent ? .heardNothing : .heard
+            return
+        }
+        if silent, let route { voiceProcessingFailedOn.insert(route) }
     }
 
     public mutating func voiceProcessingFailed(on now: AudioRoute) {
