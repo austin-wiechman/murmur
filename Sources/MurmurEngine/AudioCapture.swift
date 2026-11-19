@@ -1,5 +1,6 @@
 import AVFoundation
 import Accelerate
+import ObjCExceptionCatcher
 
 /// Microphone capture converted to 16 kHz mono Float32, the format Parakeet expects.
 ///
@@ -8,7 +9,9 @@ import Accelerate
 public final class AudioCapture: @unchecked Sendable {
     public static let sampleRate: Double = 16_000
 
-    private let engine = AVAudioEngine()
+    /// After the default input switches to a device with another sample rate, an engine can keep reporting the old
+    /// format, and tapping with it fails; a start that fails retries once on a new engine. Only touched on `engineQueue`.
+    private var engine = AVAudioEngine()
     private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: AudioCapture.sampleRate,
                                        channels: 1, interleaved: false)!
     private let lock = NSLock()
@@ -24,6 +27,9 @@ public final class AudioCapture: @unchecked Sendable {
     /// Reading `engine.inputNode` asks macOS for the microphone, so stopping never touches it
     /// unless a start already did. Only touched on `engineQueue`.
     private var inputTapped = false
+    /// Engines replaced after a failed start. Freeing one while AVFAudio still delivers a device change to it
+    /// segfaults, so they live as long as the process. Only touched on `engineQueue`.
+    private var retiredEngines: [AVAudioEngine] = []
 
     public var keepWarm: TimeInterval = 60
 
@@ -42,9 +48,10 @@ public final class AudioCapture: @unchecked Sendable {
         engineQueue.async { [self] in
             cooldown?.cancel()
             do {
-                if !engine.isRunning { try startEngine() }
+                if !engine.isRunning { try startEngineReplacingIfStale() }
                 started(nil)
             } catch {
+                stopEngine()
                 started(error)
             }
         }
@@ -87,6 +94,17 @@ public final class AudioCapture: @unchecked Sendable {
         converter = nil
     }
 
+    private func startEngineReplacingIfStale() throws {
+        do {
+            try startEngine()
+        } catch {
+            stopEngine()
+            retiredEngines.append(engine)
+            engine = AVAudioEngine()
+            try startEngine()
+        }
+    }
+
     private func startEngine() throws {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -95,7 +113,8 @@ public final class AudioCapture: @unchecked Sendable {
         }
         converter = AVAudioConverter(from: format, to: target)
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        // AVFAudio raises instead of throwing when the format no longer matches the device.
+        try ObjCExceptionCatcher.installTap(on: input, bus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.handle(buffer)
         }
         inputTapped = true
