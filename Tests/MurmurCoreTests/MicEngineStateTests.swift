@@ -114,4 +114,15 @@ struct MicEngineStateTests {
         state.settingChanged()
         #expect(state.allowsVoiceProcessing(on: micX))
     }
+
+    @Test func everyRouteWhereVoiceProcessingFailedStaysPlain() {
+        var state = MicEngineState()
+        state.voiceProcessingFailed(on: micX)
+        state.replaced()
+        state.voiceProcessingFailed(on: micY)
+        state.replaced()
+
+        #expect(!state.allowsVoiceProcessing(on: micX))
+        #expect(!state.allowsVoiceProcessing(on: micY))
+    }
 }

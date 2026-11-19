@@ -6,9 +6,9 @@ public struct MicEngineState: Equatable, Sendable {
     /// Nil until the engine's input node is first used.
     public private(set) var route: AudioRoute?
     public private(set) var voiceProcessing = false
-    /// Where voice processing turned on but the engine wouldn't start. That route records from the
+    /// Where voice processing turned on but the engine wouldn't start. Those routes record from the
     /// plain mic until the setting changes, even after other devices are used in between.
-    public private(set) var voiceProcessingFailedOn: AudioRoute?
+    public private(set) var voiceProcessingFailedOn: Set<AudioRoute> = []
     /// A voice processing take of a second or more delivered no audio, which a stale engine does
     /// without failing; a shorter take may just have ended before the first buffer.
     public private(set) var heardNothing = false
@@ -19,7 +19,7 @@ public struct MicEngineState: Equatable, Sendable {
     public init() {}
 
     public func allowsVoiceProcessing(on now: AudioRoute) -> Bool {
-        voiceProcessingFailedOn != now
+        !voiceProcessingFailedOn.contains(now)
     }
 
     /// A running engine that rode out a rate change keeps going, so the rate only counts when it's
@@ -54,10 +54,10 @@ public struct MicEngineState: Equatable, Sendable {
     }
 
     public mutating func voiceProcessingFailed(on now: AudioRoute) {
-        voiceProcessingFailedOn = now
+        voiceProcessingFailedOn.insert(now)
     }
 
     public mutating func settingChanged() {
-        voiceProcessingFailedOn = nil
+        voiceProcessingFailedOn.removeAll()
     }
 }

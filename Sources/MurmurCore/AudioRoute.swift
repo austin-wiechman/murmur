@@ -1,6 +1,6 @@
 /// The audio devices a capture engine is bound to: the default input and its sample rate, and the
 /// default output, whose sound voice processing cancels.
-public struct AudioRoute: Equatable, Sendable {
+public struct AudioRoute: Hashable, Sendable {
     public var input: UInt32
     public var inputRate: Double
     public var output: UInt32
