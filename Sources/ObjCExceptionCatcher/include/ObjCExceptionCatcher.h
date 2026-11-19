@@ -7,7 +7,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ObjCExceptionCatcher : NSObject
 
 /// Runs `block`. If it raises, returns NO with the exception's name as the error domain and its reason as the
-/// description; Swift sees this as `try ObjCExceptionCatcher.catchException { ... }`.
+/// description. A raise that unwinds through Swift frames skips their releases, so wrap AVFAudio calls here instead.
 + (BOOL)catchException:(NS_NOESCAPE void (^)(void))block error:(NSError **)error;
 
 /// Installs a tap, returning NO with an error where AVFAudio raises, such as a format that no longer matches the

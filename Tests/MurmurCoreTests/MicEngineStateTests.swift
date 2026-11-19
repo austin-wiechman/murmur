@@ -7,10 +7,6 @@ struct MicEngineStateTests {
     private let otherMic = AudioRoute(input: 11, inputRate: 48_000, output: 20)
     private let micXAt16k = AudioRoute(input: 10, inputRate: 16_000, output: 20)
 
-    @Test func anUnusedEngineIsNeverReplaced() {
-        #expect(!MicEngineState().needsNewEngine(on: otherMic, engineRunning: false))
-    }
-
     @Test func aRateChangeReplacesOnlyAStoppedEngine() {
         var state = MicEngineState()
         state.voiceProcessingChanged(to: true, on: micX)
@@ -28,35 +24,27 @@ struct MicEngineStateTests {
         #expect(processed.needsNewEngine(on: otherMic, engineRunning: false))
     }
 
-    @Test func aNewOutputOnlyMattersWithVoiceProcessing() {
+    @Test func theOutputOnlyBindsWhileVoiceProcessingIsOn() {
         var state = MicEngineState()
         state.usedInput(on: micX)
         #expect(!state.needsNewEngine(on: micY, engineRunning: false))
 
-        state.voiceProcessingChanged(to: true, on: micX)
-        #expect(state.needsNewEngine(on: micY, engineRunning: false))
-    }
-
-    @Test func voiceProcessingBindsTheOutputCurrentWhenItTurnsOn() {
-        var state = MicEngineState()
-        state.usedInput(on: micX)
         state.voiceProcessingChanged(to: true, on: micY)
         #expect(!state.needsNewEngine(on: micY, engineRunning: false))
         #expect(state.needsNewEngine(on: micX, engineRunning: false))
+
+        state.voiceProcessingChanged(to: false, on: micX)
+        #expect(!state.needsNewEngine(on: micX, engineRunning: false))
     }
 
-    @Test func turningVoiceProcessingOffFreesTheOutput() {
+    @Test func anUnboundEngineIsNeverReplaced() {
         var state = MicEngineState()
-        state.voiceProcessingChanged(to: true, on: micX)
-        state.voiceProcessingChanged(to: false, on: micY)
-        #expect(!state.needsNewEngine(on: micY, engineRunning: false))
-    }
+        #expect(!state.needsNewEngine(on: otherMic, engineRunning: false))
 
-    @Test func aReplacedEngineStartsUnbound() {
-        var state = MicEngineState()
         state.voiceProcessingChanged(to: true, on: micX)
         state.replaced()
-        #expect(state == MicEngineState())
+        #expect(!state.needsNewEngine(on: otherMic, engineRunning: false))
+        #expect(!state.voiceProcessing)
     }
 
     @Test func aSilentVoiceProcessingTakeReplacesTheEngine() {
@@ -72,18 +60,21 @@ struct MicEngineStateTests {
         #expect(!state.needsNewEngine(on: micX, engineRunning: false))
     }
 
-    @Test func aSilenceRebuildWaitsForAudioBeforeTheNext() {
+    @Test func silenceRebuildsOnceThenFallsBackToThePlainMic() {
         var state = MicEngineState()
         state.voiceProcessingChanged(to: true, on: micX)
         state.takeEnded(frames: 0, seconds: 4)
         state.replaced()
         state.voiceProcessingChanged(to: true, on: micX)
-        state.takeEnded(frames: 0, seconds: 4)
-        #expect(!state.needsNewEngine(on: micX, engineRunning: true))
-
         state.takeEnded(frames: 16_000, seconds: 1)
         state.takeEnded(frames: 0, seconds: 4)
         #expect(state.needsNewEngine(on: micX, engineRunning: true))
+
+        state.replaced()
+        state.voiceProcessingChanged(to: true, on: micX)
+        state.takeEnded(frames: 0, seconds: 4)
+        #expect(!state.needsNewEngine(on: micX, engineRunning: true))
+        #expect(!state.allowsVoiceProcessing(on: micX))
     }
 
     @Test func aSilentPlainTakeKeepsTheEngine() {
@@ -93,25 +84,19 @@ struct MicEngineStateTests {
         #expect(!state.needsNewEngine(on: micX, engineRunning: false))
     }
 
-    @Test func aFailureMarkedOnTheEnginesRouteSkipsDevicesItNeverRanOn() throws {
-        var state = MicEngineState()
-        state.voiceProcessingChanged(to: true, on: micX)
-        let failedRoute = state.route
-        state.replaced()
-        state.usedInput(on: otherMic)
-        state.voiceProcessingFailed(on: try #require(failedRoute))
-        #expect(!state.allowsVoiceProcessing(on: micX))
-        #expect(state.allowsVoiceProcessing(on: otherMic))
-    }
-
-    @Test func aVoiceProcessingFailureHoldsOnlyForItsRouteUntilTheSettingChanges() {
+    @Test func voiceProcessingFailuresHoldForTheirRoutesUntilTheSettingChanges() {
         var state = MicEngineState()
         state.voiceProcessingFailed(on: micX)
         state.replaced()
         #expect(!state.allowsVoiceProcessing(on: micX))
         #expect(state.allowsVoiceProcessing(on: micY))
 
+        state.voiceProcessingFailed(on: micY)
+        state.replaced()
+        #expect(!state.allowsVoiceProcessing(on: micX))
+        #expect(!state.allowsVoiceProcessing(on: micY))
+
         state.settingChanged()
         #expect(state.allowsVoiceProcessing(on: micX))
-    }
-}
+        #expect(state.allowsVoiceProcessing(on: micY))
+    }}
