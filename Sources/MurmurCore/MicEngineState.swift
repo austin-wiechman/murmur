@@ -12,6 +12,9 @@ public struct MicEngineState: Equatable, Sendable {
     /// A voice processing take of a second or more delivered no audio, which a stale engine does
     /// without failing; a shorter take may just have ended before the first buffer.
     public private(set) var heardNothing = false
+    /// Set by a rebuild for silence and cleared once a take hears audio, so a route that never
+    /// delivers costs one rebuild rather than one per take.
+    public private(set) var rebuiltForSilence = false
 
     public init() {}
 
@@ -39,13 +42,15 @@ public struct MicEngineState: Equatable, Sendable {
     }
 
     public mutating func replaced() {
+        if heardNothing { rebuiltForSilence = true }
         route = nil
         voiceProcessing = false
         heardNothing = false
     }
 
     public mutating func takeEnded(frames: Int, seconds: Double) {
-        heardNothing = voiceProcessing && frames == 0 && seconds >= 1
+        if frames > 0 { rebuiltForSilence = false }
+        heardNothing = !rebuiltForSilence && voiceProcessing && frames == 0 && seconds >= 1
     }
 
     public mutating func voiceProcessingFailed(on now: AudioRoute) {
