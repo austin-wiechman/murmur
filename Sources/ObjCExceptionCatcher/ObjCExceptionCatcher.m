@@ -28,14 +28,11 @@
 }
 
 + (BOOL)setVoiceProcessingOnEngine:(AVAudioEngine *)engine enabled:(BOOL)enabled error:(NSError **)error {
-    __block NSError *thrown = nil;
+    __block BOOL succeeded = YES;
     BOOL returned = [self catchException:^{
         AVAudioInputNode *input = engine.inputNode;
-        NSError *failure = nil;
-        if (![input setVoiceProcessingEnabled:enabled error:&failure]) {
-            thrown = failure ?: [NSError errorWithDomain:@"ObjCExceptionCatcher" code:-1 userInfo:@{
-                NSLocalizedDescriptionKey: @"setVoiceProcessingEnabled failed without an error",
-            }];
+        if (![input setVoiceProcessingEnabled:enabled error:error]) {
+            succeeded = NO;
             return;
         }
         if (!enabled) return;
@@ -45,12 +42,7 @@
         };
         input.voiceProcessingOtherAudioDuckingConfiguration = ducking;
     } error:error];
-    if (!returned) return NO;
-    if (thrown) {
-        if (error) *error = thrown;
-        return NO;
-    }
-    return YES;
+    return returned && succeeded;
 }
 
 + (BOOL)isVoiceProcessingEnabledOnEngine:(AVAudioEngine *)engine {
