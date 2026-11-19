@@ -73,6 +73,11 @@ public final class AudioCapture: @unchecked Sendable {
         engineQueue.async { [self] in
             cooldown?.cancel()
             let route = Self.currentRoute()
+            guard route.input != kAudioObjectUnknown else {
+                stopEngine()
+                started(CaptureError.noInputDevice)
+                return
+            }
             let voiceProcessing = wanted && engineState.allowsVoiceProcessing(on: route)
             retireIfRouteChanged(route)
             if engine.isRunning, startedWithVoiceProcessing != voiceProcessing { stopEngine() }
@@ -187,11 +192,13 @@ public final class AudioCapture: @unchecked Sendable {
     private func startEngineReplacingIfStale(voiceProcessing: Bool) throws {
         do {
             try startEngine(voiceProcessing: voiceProcessing)
+        } catch CaptureError.noInputDevice {
+            throw CaptureError.noInputDevice
         } catch {
             retireEngine()
             do {
                 try startEngine(voiceProcessing: voiceProcessing)
-            } catch where voiceProcessing {
+            } catch let error where voiceProcessing && error as? CaptureError != .noInputDevice {
                 let triedVoiceProcessing = engineState.voiceProcessing
                 retireEngine()
                 try startEngine(voiceProcessing: false)
