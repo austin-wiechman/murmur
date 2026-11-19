@@ -60,18 +60,21 @@ struct MicEngineStateTests {
         #expect(!state.needsNewEngine(on: micX, engineRunning: false))
     }
 
-    @Test func aSilenceRebuildWaitsForAudioBeforeTheNext() {
+    @Test func silenceRebuildsOnceThenFallsBackToThePlainMic() {
         var state = MicEngineState()
         state.voiceProcessingChanged(to: true, on: micX)
         state.takeEnded(frames: 0, seconds: 4)
         state.replaced()
         state.voiceProcessingChanged(to: true, on: micX)
-        state.takeEnded(frames: 0, seconds: 4)
-        #expect(!state.needsNewEngine(on: micX, engineRunning: true))
-
         state.takeEnded(frames: 16_000, seconds: 1)
         state.takeEnded(frames: 0, seconds: 4)
         #expect(state.needsNewEngine(on: micX, engineRunning: true))
+
+        state.replaced()
+        state.voiceProcessingChanged(to: true, on: micX)
+        state.takeEnded(frames: 0, seconds: 4)
+        #expect(!state.needsNewEngine(on: micX, engineRunning: true))
+        #expect(!state.allowsVoiceProcessing(on: micX))
     }
 
     @Test func aSilentPlainTakeKeepsTheEngine() {
@@ -112,17 +115,4 @@ struct MicEngineStateTests {
 
         #expect(!state.allowsVoiceProcessing(on: micX))
         #expect(!state.allowsVoiceProcessing(on: micY))
-    }
-
-    @Test func silenceAfterASilenceRebuildFallsBackToThePlainMic() {
-        var state = MicEngineState()
-        state.voiceProcessingChanged(to: true, on: micX)
-        state.takeEnded(frames: 0, seconds: 4)
-        state.replaced()
-        state.usedInput(on: micX)
-        state.voiceProcessingChanged(to: true, on: micX)
-        state.takeEnded(frames: 0, seconds: 4)
-
-        #expect(!state.allowsVoiceProcessing(on: micX))
-    }
-}
+    }}
