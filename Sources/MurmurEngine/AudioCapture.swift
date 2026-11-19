@@ -117,6 +117,8 @@ public final class AudioCapture: @unchecked Sendable {
 
     private func retireEngine() {
         stopEngine()
+        // Retired engines live as long as the process, so none keeps a voice processing unit.
+        if engineState.voiceProcessing { try? ObjCExceptionCatcher.setVoiceProcessing(on: engine, enabled: false) }
         retiredEngines.append(engine)
         engine = AVAudioEngine()
         engineState.replaced()
