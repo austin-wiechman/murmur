@@ -1,5 +1,6 @@
 import AVFoundation
 import Accelerate
+import ObjCExceptionCatcher
 
 /// Microphone capture converted to 16 kHz mono Float32, the format Parakeet expects.
 ///
@@ -45,6 +46,7 @@ public final class AudioCapture: @unchecked Sendable {
                 if !engine.isRunning { try startEngine() }
                 started(nil)
             } catch {
+                stopEngine()
                 started(error)
             }
         }
@@ -95,8 +97,11 @@ public final class AudioCapture: @unchecked Sendable {
         }
         converter = AVAudioConverter(from: format, to: target)
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            self?.handle(buffer)
+        // AVFAudio raises instead of throwing when the format no longer matches the device.
+        try ObjCExceptionCatcher.catchException {
+            input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+                self?.handle(buffer)
+            }
         }
         inputTapped = true
         engine.prepare()

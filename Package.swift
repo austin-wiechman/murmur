@@ -21,7 +21,7 @@ let package = Package(
         .target(name: "SpeechModels", dependencies: [.product(name: "FluidAudio", package: "FluidAudio")]),
         .target(name: "ObjCExceptionCatcher"),
         .target(name: "MurmurEngine",
-                dependencies: ["TranscriptCleanup", "ClaudeCodeRunner", "SpeechModels",
+                dependencies: ["TranscriptCleanup", "ClaudeCodeRunner", "SpeechModels", "ObjCExceptionCatcher",
                               .product(name: "FluidAudio", package: "FluidAudio")],
                 swiftSettings: [.swiftLanguageMode(.v5)]),
         .executableTarget(name: "Murmur",
