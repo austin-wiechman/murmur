@@ -24,6 +24,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)setVoiceProcessingOnEngine:(AVAudioEngine *)engine enabled:(BOOL)enabled error:(NSError **)error
     NS_SWIFT_NAME(setVoiceProcessing(on:enabled:));
 
+/// Whether the engine's input node has voice processing on; NO where AVFAudio raises.
++ (BOOL)isVoiceProcessingEnabledOnEngine:(AVAudioEngine *)engine NS_SWIFT_NAME(isVoiceProcessingEnabled(on:));
+
 @end
 
 NS_ASSUME_NONNULL_END

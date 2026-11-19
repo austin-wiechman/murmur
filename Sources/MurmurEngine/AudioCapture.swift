@@ -241,9 +241,10 @@ public final class AudioCapture: @unchecked Sendable {
             try ObjCExceptionCatcher.setVoiceProcessing(on: engine, enabled: enabled)
         } catch {
             NSLog("Murmur: couldn't turn voice processing \(enabled ? "on" : "off"): \(error)")
-            return
         }
-        engineState.voiceProcessingChanged(to: enabled, on: Self.currentRoute())
+        // A failure can come after the switch, such as in the ducking setter, so ask the node.
+        let isEnabled = ObjCExceptionCatcher.isVoiceProcessingEnabled(on: engine)
+        engineState.voiceProcessingChanged(to: isEnabled, on: Self.currentRoute())
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer) {
