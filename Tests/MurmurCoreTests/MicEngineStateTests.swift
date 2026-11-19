@@ -24,28 +24,17 @@ struct MicEngineStateTests {
         #expect(processed.needsNewEngine(on: otherMic, engineRunning: false))
     }
 
-    @Test func aNewOutputOnlyMattersWithVoiceProcessing() {
+    @Test func theOutputOnlyBindsWhileVoiceProcessingIsOn() {
         var state = MicEngineState()
         state.usedInput(on: micX)
         #expect(!state.needsNewEngine(on: micY, engineRunning: false))
 
-        state.voiceProcessingChanged(to: true, on: micX)
-        #expect(state.needsNewEngine(on: micY, engineRunning: false))
-    }
-
-    @Test func voiceProcessingBindsTheOutputCurrentWhenItTurnsOn() {
-        var state = MicEngineState()
-        state.usedInput(on: micX)
         state.voiceProcessingChanged(to: true, on: micY)
         #expect(!state.needsNewEngine(on: micY, engineRunning: false))
         #expect(state.needsNewEngine(on: micX, engineRunning: false))
-    }
 
-    @Test func turningVoiceProcessingOffFreesTheOutput() {
-        var state = MicEngineState()
-        state.voiceProcessingChanged(to: true, on: micX)
-        state.voiceProcessingChanged(to: false, on: micY)
-        #expect(!state.needsNewEngine(on: micY, engineRunning: false))
+        state.voiceProcessingChanged(to: false, on: micX)
+        #expect(!state.needsNewEngine(on: micX, engineRunning: false))
     }
 
     @Test func anUnboundEngineIsNeverReplaced() {
