@@ -200,8 +200,6 @@ public final class AudioCapture: @unchecked Sendable {
     private func startEngineReplacingIfStale(voiceProcessing: Bool) throws {
         do {
             try startEngine(voiceProcessing: voiceProcessing)
-        } catch CaptureError.noInputDevice {
-            throw CaptureError.noInputDevice
         } catch {
             retireEngine()
             do {
