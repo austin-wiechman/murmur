@@ -35,7 +35,7 @@ public final class AudioCapture: @unchecked Sendable {
     /// Apple's voice processing: cancels what the speakers play and suppresses background noise.
     /// It can only change while the engine is stopped, so a change stops and prepares an idle
     /// engine now and switches a warm one at the next `start`.
-    public var voiceProcessing = true {
+    public var voiceProcessing = false {
         didSet {
             guard voiceProcessing != oldValue else { return }
             let voiceProcessing = voiceProcessing
@@ -48,6 +48,9 @@ public final class AudioCapture: @unchecked Sendable {
     }
     /// The mode the running engine was asked for. Only touched on `engineQueue`.
     private var startedWithVoiceProcessing = false
+    /// Whether the current engine's input node has voice processing on, so the off path can skip
+    /// `inputNode`, which would create the node. Only touched on `engineQueue`.
+    private var voiceProcessingOnEngine = false
 
     public init() {}
 
@@ -79,8 +82,8 @@ public final class AudioCapture: @unchecked Sendable {
     /// otherwise wait about a second for it. The mic stays off, and without mic access this does
     /// nothing, so it never prompts.
     public func prepare() {
-        let voiceProcessing = voiceProcessing
-        engineQueue.async { [self] in prepareStoppedEngine(voiceProcessing: voiceProcessing) }
+        guard voiceProcessing else { return }
+        engineQueue.async { [self] in prepareStoppedEngine(voiceProcessing: true) }
     }
 
     private func prepareStoppedEngine(voiceProcessing: Bool) {
@@ -133,6 +136,7 @@ public final class AudioCapture: @unchecked Sendable {
             stopEngine()
             retiredEngines.append(engine)
             engine = AVAudioEngine()
+            voiceProcessingOnEngine = false
             try startEngine(voiceProcessing: voiceProcessing)
         }
     }
@@ -162,14 +166,15 @@ public final class AudioCapture: @unchecked Sendable {
     /// The first enable takes about a second; the node keeps it across stops, so later starts skip
     /// that. If it can't be enabled, capture carries on with the plain mic.
     private func setVoiceProcessing(_ enabled: Bool) {
+        guard enabled != voiceProcessingOnEngine else { return }
         let input = engine.inputNode
-        guard input.isVoiceProcessingEnabled != enabled else { return }
         do {
             try input.setVoiceProcessingEnabled(enabled)
         } catch {
             NSLog("Murmur: couldn't turn voice processing \(enabled ? "on" : "off"): \(error)")
             return
         }
+        voiceProcessingOnEngine = enabled
         if enabled {
             input.voiceProcessingOtherAudioDuckingConfiguration =
                 AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
