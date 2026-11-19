@@ -42,6 +42,7 @@ public final class AudioCapture: @unchecked Sendable {
             guard voiceProcessing != oldValue else { return }
             let voiceProcessing = voiceProcessing
             engineQueue.async { [self] in
+                engineState.settingChanged()
                 guard lock.withLock({ sink == nil }) else { return }
                 stopEngine()
                 prepareStoppedEngine(voiceProcessing: voiceProcessing)
@@ -53,9 +54,6 @@ public final class AudioCapture: @unchecked Sendable {
     /// What the current engine is bound to. Its voice processing flag also lets the off path skip
     /// `inputNode`, which would create the node. Only touched on `engineQueue`.
     private var engineState = MicEngineState()
-    /// Set when the mic started only without voice processing; the rest of the session records
-    /// plain. Only touched on `engineQueue`.
-    private var voiceProcessingUnavailable = false
 
     public init() {}
 
@@ -72,8 +70,9 @@ public final class AudioCapture: @unchecked Sendable {
         let wanted = voiceProcessing
         engineQueue.async { [self] in
             cooldown?.cancel()
-            let voiceProcessing = wanted && !voiceProcessingUnavailable
-            retireIfRouteChanged(Self.currentRoute())
+            let route = Self.currentRoute()
+            let voiceProcessing = wanted && engineState.allowsVoiceProcessing(on: route)
+            retireIfRouteChanged(route)
             if engine.isRunning, startedWithVoiceProcessing != voiceProcessing { stopEngine() }
             do {
                 if !engine.isRunning { try startEngineReplacingIfStale(voiceProcessing: voiceProcessing) }
@@ -94,8 +93,8 @@ public final class AudioCapture: @unchecked Sendable {
     }
 
     private func prepareStoppedEngine(voiceProcessing wanted: Bool) {
-        let voiceProcessing = wanted && !voiceProcessingUnavailable
         let route = Self.currentRoute()
+        let voiceProcessing = wanted && engineState.allowsVoiceProcessing(on: route)
         guard !engine.isRunning, route.input != kAudioObjectUnknown,
               AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
         retireIfRouteChanged(route)
@@ -177,10 +176,12 @@ public final class AudioCapture: @unchecked Sendable {
             do {
                 try startEngine(voiceProcessing: voiceProcessing)
             } catch where voiceProcessing {
+                let triedVoiceProcessing = engineState.voiceProcessing
                 retireEngine()
                 try startEngine(voiceProcessing: false)
-                voiceProcessingUnavailable = true
-                NSLog("Murmur: the mic only starts without voice processing, so this session records without it: \(error)")
+                guard triedVoiceProcessing else { return }
+                engineState.voiceProcessingFailed(on: Self.currentRoute())
+                NSLog("Murmur: the mic only starts without voice processing; using the plain mic on these devices: \(error)")
             }
         }
     }

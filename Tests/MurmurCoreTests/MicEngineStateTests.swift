@@ -50,4 +50,15 @@ struct MicEngineStateTests {
         state.replaced()
         #expect(state == MicEngineState())
     }
+
+    @Test func aVoiceProcessingFailureHoldsOnlyForItsRouteUntilTheSettingChanges() {
+        var state = MicEngineState()
+        state.voiceProcessingFailed(on: micX)
+        state.replaced()
+        #expect(!state.allowsVoiceProcessing(on: micX))
+        #expect(state.allowsVoiceProcessing(on: micY))
+
+        state.settingChanged()
+        #expect(state.allowsVoiceProcessing(on: micX))
+    }
 }

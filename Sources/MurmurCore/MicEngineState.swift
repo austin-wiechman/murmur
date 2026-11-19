@@ -6,8 +6,15 @@ public struct MicEngineState: Equatable, Sendable {
     /// Nil until the engine's input node is first used.
     public private(set) var route: AudioRoute?
     public private(set) var voiceProcessing = false
+    /// Where voice processing turned on but the engine wouldn't start. That route records from the
+    /// plain mic until the devices or the setting change; it survives replacing the engine.
+    public private(set) var voiceProcessingFailedOn: AudioRoute?
 
     public init() {}
+
+    public func allowsVoiceProcessing(on now: AudioRoute) -> Bool {
+        voiceProcessingFailedOn != now
+    }
 
     public func needsNewEngine(on now: AudioRoute) -> Bool {
         guard let route else { return false }
@@ -24,6 +31,15 @@ public struct MicEngineState: Equatable, Sendable {
     }
 
     public mutating func replaced() {
-        self = MicEngineState()
+        route = nil
+        voiceProcessing = false
+    }
+
+    public mutating func voiceProcessingFailed(on now: AudioRoute) {
+        voiceProcessingFailedOn = now
+    }
+
+    public mutating func settingChanged() {
+        voiceProcessingFailedOn = nil
     }
 }
