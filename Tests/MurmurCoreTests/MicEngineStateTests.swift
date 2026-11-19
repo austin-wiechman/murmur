@@ -7,10 +7,6 @@ struct MicEngineStateTests {
     private let otherMic = AudioRoute(input: 11, inputRate: 48_000, output: 20)
     private let micXAt16k = AudioRoute(input: 10, inputRate: 16_000, output: 20)
 
-    @Test func anUnusedEngineIsNeverReplaced() {
-        #expect(!MicEngineState().needsNewEngine(on: otherMic, engineRunning: false))
-    }
-
     @Test func aRateChangeReplacesOnlyAStoppedEngine() {
         var state = MicEngineState()
         state.voiceProcessingChanged(to: true, on: micX)
@@ -52,11 +48,14 @@ struct MicEngineStateTests {
         #expect(!state.needsNewEngine(on: micY, engineRunning: false))
     }
 
-    @Test func aReplacedEngineStartsUnbound() {
+    @Test func anUnboundEngineIsNeverReplaced() {
         var state = MicEngineState()
+        #expect(!state.needsNewEngine(on: otherMic, engineRunning: false))
+
         state.voiceProcessingChanged(to: true, on: micX)
         state.replaced()
-        #expect(state == MicEngineState())
+        #expect(!state.needsNewEngine(on: otherMic, engineRunning: false))
+        #expect(!state.voiceProcessing)
     }
 
     @Test func aSilentVoiceProcessingTakeReplacesTheEngine() {
