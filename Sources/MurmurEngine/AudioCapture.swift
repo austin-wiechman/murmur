@@ -104,7 +104,7 @@ public final class AudioCapture: @unchecked Sendable {
     /// With voice processing the node's format no longer follows the hardware, so a tap on an
     /// engine left on old devices can succeed and deliver nothing; a changed route gets a new one.
     private func retireIfRouteChanged(_ route: AudioRoute) {
-        guard engineState.needsNewEngine(on: route) else { return }
+        guard engineState.needsNewEngine(on: route, engineRunning: engine.isRunning) else { return }
         retireEngine()
     }
 
@@ -116,8 +116,19 @@ public final class AudioCapture: @unchecked Sendable {
     }
 
     private static func currentRoute() -> AudioRoute {
-        AudioRoute(input: defaultDevice(kAudioHardwarePropertyDefaultInputDevice),
-                   output: defaultDevice(kAudioHardwarePropertyDefaultOutputDevice))
+        let input = defaultDevice(kAudioHardwarePropertyDefaultInputDevice)
+        return AudioRoute(input: input, inputRate: nominalRate(of: input),
+                          output: defaultDevice(kAudioHardwarePropertyDefaultOutputDevice))
+    }
+
+    private static func nominalRate(of device: AudioObjectID) -> Double {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var rate: Float64 = 0
+        var size = UInt32(MemoryLayout<Float64>.size)
+        AudioObjectGetPropertyData(device, &address, 0, nil, &size, &rate)
+        return rate
     }
 
     private static func defaultDevice(_ selector: AudioObjectPropertySelector) -> AudioObjectID {

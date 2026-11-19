@@ -16,9 +16,13 @@ public struct MicEngineState: Equatable, Sendable {
         voiceProcessingFailedOn != now
     }
 
-    public func needsNewEngine(on now: AudioRoute) -> Bool {
+    /// A running engine that rode out a rate change keeps going, so the rate only counts when it's
+    /// stopped; that also ignores whatever rate a running voice processing engine reports.
+    public func needsNewEngine(on now: AudioRoute, engineRunning: Bool) -> Bool {
         guard let route else { return false }
-        return now.input != route.input || (voiceProcessing && now.output != route.output)
+        if now.input != route.input { return true }
+        if !engineRunning, now.inputRate != route.inputRate { return true }
+        return voiceProcessing && now.output != route.output
     }
 
     public mutating func usedInput(on now: AudioRoute) {
