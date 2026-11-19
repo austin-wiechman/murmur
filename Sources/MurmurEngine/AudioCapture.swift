@@ -9,8 +9,8 @@ import ObjCExceptionCatcher
 public final class AudioCapture: @unchecked Sendable {
     public static let sampleRate: Double = 16_000
 
-    /// Replaced on every start from stopped: after the default input switches to a device with another sample rate,
-    /// an engine keeps reporting the old format, and tapping with it fails. Only touched on `engineQueue`.
+    /// After the default input switches to a device with another sample rate, an engine can keep reporting the old
+    /// format, and tapping with it fails; a start that fails retries once on a new engine. Only touched on `engineQueue`.
     private var engine = AVAudioEngine()
     private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: AudioCapture.sampleRate,
                                        channels: 1, interleaved: false)!
@@ -45,10 +45,7 @@ public final class AudioCapture: @unchecked Sendable {
         engineQueue.async { [self] in
             cooldown?.cancel()
             do {
-                if !engine.isRunning {
-                    replaceEngine()
-                    try startEngine()
-                }
+                if !engine.isRunning { try startEngineReplacingIfStale() }
                 started(nil)
             } catch {
                 stopEngine()
@@ -94,9 +91,17 @@ public final class AudioCapture: @unchecked Sendable {
         converter = nil
     }
 
-    private func replaceEngine() {
-        stopEngine()
-        engine = AVAudioEngine()
+    private func startEngineReplacingIfStale() throws {
+        do {
+            try startEngine()
+        } catch {
+            stopEngine()
+            let stale = engine
+            engine = AVAudioEngine()
+            // Freeing an engine while its device change is still being delivered crashes in AVFAudio.
+            engineQueue.asyncAfter(deadline: .now() + 10) { withExtendedLifetime(stale) {} }
+            try startEngine()
+        }
     }
 
     private func startEngine() throws {
