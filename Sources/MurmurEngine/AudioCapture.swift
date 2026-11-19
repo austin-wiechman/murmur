@@ -168,17 +168,27 @@ public final class AudioCapture: @unchecked Sendable {
     private func setVoiceProcessing(_ enabled: Bool) {
         guard enabled != voiceProcessingOnEngine else { return }
         let input = engine.inputNode
+        var thrown: Error?
         do {
-            try input.setVoiceProcessingEnabled(enabled)
+            // AVFAudio raises instead of throwing for some device states, and this runs at launch.
+            try ObjCExceptionCatcher.catchException {
+                do {
+                    try input.setVoiceProcessingEnabled(enabled)
+                    guard enabled else { return }
+                    input.voiceProcessingOtherAudioDuckingConfiguration =
+                        AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
+                } catch {
+                    thrown = error
+                }
+            }
         } catch {
-            NSLog("Murmur: couldn't turn voice processing \(enabled ? "on" : "off"): \(error)")
+            thrown = error
+        }
+        if let thrown {
+            NSLog("Murmur: couldn't turn voice processing \(enabled ? "on" : "off"): \(thrown)")
             return
         }
         voiceProcessingOnEngine = enabled
-        if enabled {
-            input.voiceProcessingOtherAudioDuckingConfiguration =
-                AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
-        }
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer) {
