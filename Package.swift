@@ -19,6 +19,7 @@ let package = Package(
         .target(name: "ClaudeCodeRunner"),
         .target(name: "TranscriptCleanup"),
         .target(name: "SpeechModels", dependencies: [.product(name: "FluidAudio", package: "FluidAudio")]),
+        .target(name: "ObjCExceptionCatcher"),
         .target(name: "MurmurEngine",
                 dependencies: ["TranscriptCleanup", "ClaudeCodeRunner", "SpeechModels",
                               .product(name: "FluidAudio", package: "FluidAudio")],
@@ -35,5 +36,6 @@ let package = Package(
         .testTarget(name: "SpeechModelsTests",
                     dependencies: ["SpeechModels", .product(name: "FluidAudio", package: "FluidAudio")]),
         .testTarget(name: "MurmurTests", dependencies: ["Murmur"]),
+        .testTarget(name: "ObjCExceptionCatcherTests", dependencies: ["ObjCExceptionCatcher"]),
     ]
 )
