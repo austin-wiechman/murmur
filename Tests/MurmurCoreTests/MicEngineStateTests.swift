@@ -125,4 +125,16 @@ struct MicEngineStateTests {
         #expect(!state.allowsVoiceProcessing(on: micX))
         #expect(!state.allowsVoiceProcessing(on: micY))
     }
+
+    @Test func silenceAfterASilenceRebuildFallsBackToThePlainMic() {
+        var state = MicEngineState()
+        state.voiceProcessingChanged(to: true, on: micX)
+        state.takeEnded(frames: 0, seconds: 4)
+        state.replaced()
+        state.usedInput(on: micX)
+        state.voiceProcessingChanged(to: true, on: micX)
+        state.takeEnded(frames: 0, seconds: 4)
+
+        #expect(!state.allowsVoiceProcessing(on: micX))
+    }
 }
