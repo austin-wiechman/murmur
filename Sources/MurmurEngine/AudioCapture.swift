@@ -27,13 +27,16 @@ public final class AudioCapture: @unchecked Sendable {
 
     public var keepWarm: TimeInterval = 60
     /// Apple's voice processing: cancels what the speakers play and suppresses background noise.
-    /// It can only change while the engine is stopped, so a change stops an idle engine now and a
-    /// warm one at the next `start`.
+    /// It can only change while the engine is stopped, so a change stops and prepares an idle
+    /// engine now and switches a warm one at the next `start`.
     public var voiceProcessing = true {
         didSet {
             guard voiceProcessing != oldValue else { return }
+            let voiceProcessing = voiceProcessing
             engineQueue.async { [self] in
-                if lock.withLock({ sink == nil }) { stopEngine() }
+                guard lock.withLock({ sink == nil }) else { return }
+                stopEngine()
+                prepareStoppedEngine(voiceProcessing: voiceProcessing)
             }
         }
     }
@@ -63,6 +66,19 @@ public final class AudioCapture: @unchecked Sendable {
                 started(error)
             }
         }
+    }
+
+    /// Switches voice processing on a stopped engine ahead of the first `start`, which would
+    /// otherwise wait about a second for it. The mic stays off, and without mic access this does
+    /// nothing, so it never prompts.
+    public func prepare() {
+        let voiceProcessing = voiceProcessing
+        engineQueue.async { [self] in prepareStoppedEngine(voiceProcessing: voiceProcessing) }
+    }
+
+    private func prepareStoppedEngine(voiceProcessing: Bool) {
+        guard !engine.isRunning, AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
+        setVoiceProcessing(voiceProcessing)
     }
 
     /// Stops recording and returns how many frames were captured since `start`.
