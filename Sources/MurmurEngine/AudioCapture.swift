@@ -26,6 +26,19 @@ public final class AudioCapture: @unchecked Sendable {
     private var inputTapped = false
 
     public var keepWarm: TimeInterval = 60
+    /// Apple's voice processing: cancels what the speakers play and suppresses background noise.
+    /// It can only change while the engine is stopped, so a change stops an idle engine now and a
+    /// warm one at the next `start`.
+    public var voiceProcessing = true {
+        didSet {
+            guard voiceProcessing != oldValue else { return }
+            engineQueue.async { [self] in
+                if lock.withLock({ sink == nil }) { stopEngine() }
+            }
+        }
+    }
+    /// The mode the running engine was asked for. Only touched on `engineQueue`.
+    private var startedWithVoiceProcessing = false
 
     public init() {}
 
@@ -39,10 +52,12 @@ public final class AudioCapture: @unchecked Sendable {
             squaresSinceRead = 0
             framesSinceRead = 0
         }
+        let voiceProcessing = voiceProcessing
         engineQueue.async { [self] in
             cooldown?.cancel()
+            if engine.isRunning, startedWithVoiceProcessing != voiceProcessing { stopEngine() }
             do {
-                if !engine.isRunning { try startEngine() }
+                if !engine.isRunning { try startEngine(voiceProcessing: voiceProcessing) }
                 started(nil)
             } catch {
                 started(error)
@@ -87,13 +102,18 @@ public final class AudioCapture: @unchecked Sendable {
         converter = nil
     }
 
-    private func startEngine() throws {
+    private func startEngine(voiceProcessing: Bool) throws {
+        setVoiceProcessing(voiceProcessing)
+        startedWithVoiceProcessing = voiceProcessing
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
             throw CaptureError.noInputDevice
         }
         converter = AVAudioConverter(from: format, to: target)
+        // Voice processing delivers four identical discrete channels, which the converter's
+        // default mapping turns into silence. Plain stereo input already maps channel 0.
+        converter?.channelMap = [0]
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.handle(buffer)
@@ -101,6 +121,23 @@ public final class AudioCapture: @unchecked Sendable {
         inputTapped = true
         engine.prepare()
         try engine.start()
+    }
+
+    /// The first enable takes about a second; the node keeps it across stops, so later starts skip
+    /// that. If it can't be enabled, capture carries on with the plain mic.
+    private func setVoiceProcessing(_ enabled: Bool) {
+        let input = engine.inputNode
+        guard input.isVoiceProcessingEnabled != enabled else { return }
+        do {
+            try input.setVoiceProcessingEnabled(enabled)
+        } catch {
+            NSLog("Murmur: couldn't turn voice processing \(enabled ? "on" : "off"): \(error)")
+            return
+        }
+        if enabled {
+            input.voiceProcessingOtherAudioDuckingConfiguration =
+                AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
+        }
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer) {
