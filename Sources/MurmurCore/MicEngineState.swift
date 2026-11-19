@@ -10,8 +10,7 @@ public struct MicEngineState: Equatable, Sendable {
     /// record from the plain mic until the setting changes, even after other devices are used in between.
     public private(set) var voiceProcessingFailedOn: Set<AudioRoute> = []
     /// A voice processing take of a second or more that delivers no audio means a stale engine, which
-    /// doesn't fail; a shorter take may just have ended before the first buffer. After one rebuild for
-    /// silence, a route that still delivers nothing falls back to the plain mic instead of rebuilding again.
+    /// doesn't fail; a shorter take may just have ended before the first buffer.
     private var silence = Silence.heard
 
     private enum Silence: Equatable, Sendable {

@@ -12,7 +12,7 @@ public final class AudioCapture: @unchecked Sendable {
     public static let sampleRate: Double = 16_000
 
     /// After the default input switches to a device with another sample rate, an engine can keep reporting the old
-    /// format, and tapping with it fails; a start that fails retries once on a new engine. Only touched on `engineQueue`.
+    /// format, and tapping with it fails, so engines get replaced. Only touched on `engineQueue`.
     private var engine = AVAudioEngine()
     private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: AudioCapture.sampleRate,
                                        channels: 1, interleaved: false)!
@@ -29,14 +29,14 @@ public final class AudioCapture: @unchecked Sendable {
     /// Reading `engine.inputNode` asks macOS for the microphone, so stopping never touches it
     /// unless a start already did. Only touched on `engineQueue`.
     private var inputTapped = false
-    /// Engines replaced after a failed start. Freeing one while AVFAudio still delivers a device change to it
+    /// Replaced engines. Freeing one while AVFAudio still delivers a device change to it
     /// segfaults, so they live as long as the process. Only touched on `engineQueue`.
     private var retiredEngines: [AVAudioEngine] = []
 
     public var keepWarm: TimeInterval = 60
     /// Apple's voice processing: cancels what the speakers play and suppresses background noise.
-    /// It can only change while the engine is stopped, so a change stops and prepares an idle
-    /// engine now and switches a warm one at the next `start`.
+    /// It can only change while the engine is stopped, so a change takes effect now, or at the next
+    /// `start` if a take is running.
     public var voiceProcessing = false {
         didSet {
             guard voiceProcessing != oldValue else { return }
@@ -51,8 +51,7 @@ public final class AudioCapture: @unchecked Sendable {
     }
     /// The mode the running engine was asked for. Only touched on `engineQueue`.
     private var startedWithVoiceProcessing = false
-    /// What the current engine is bound to. Its voice processing flag also lets the off path skip
-    /// `inputNode`, which would create the node. Only touched on `engineQueue`.
+    /// Only touched on `engineQueue`.
     private var engineState = MicEngineState()
     /// When the engine went live for the current take; a slow start doesn't count as a silent take.
     /// Only touched on `engineQueue`.
@@ -189,7 +188,6 @@ public final class AudioCapture: @unchecked Sendable {
     }
 
     /// A replacement engine hasn't been prepared, so its start pays the voice processing enable.
-    /// If voice processing turns on but the engine won't start twice, a plain start is tried.
     private func startEngineReplacingIfStale(voiceProcessing: Bool) throws {
         do {
             try startEngine(voiceProcessing: voiceProcessing)
@@ -198,6 +196,7 @@ public final class AudioCapture: @unchecked Sendable {
             do {
                 try startEngine(voiceProcessing: voiceProcessing)
             } catch let error where voiceProcessing && error as? CaptureError != .noInputDevice {
+                // Only a route where voice processing actually came on is blamed for the failure.
                 let failedRoute = engineState.voiceProcessing ? engineState.route : nil
                 retireEngine()
                 try startEngine(voiceProcessing: false)
@@ -234,6 +233,7 @@ public final class AudioCapture: @unchecked Sendable {
     /// The first enable takes about a second; the node keeps it across stops, so later starts skip
     /// that. If it can't be enabled, capture carries on with the plain mic.
     private func setVoiceProcessing(_ enabled: Bool) {
+        // Returning here keeps the off path from touching `inputNode`, which would create the node.
         guard enabled != engineState.voiceProcessing else { return }
         // Read before the switch, which binds the node and takes about a second.
         let route = Self.currentRoute()
